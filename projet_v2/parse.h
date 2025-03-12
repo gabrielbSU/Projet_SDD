@@ -5,9 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "hachage.h"
+#include "dynamique.h"
 
 #define TABLE_SIZE 128
 #define TOMBSTONE ((void*)-1)
+
+extern int total_data_allocated;
+extern int total_code_allocated;
 
 typedef struct {
     char *mnemonic;
@@ -16,9 +20,9 @@ typedef struct {
 } Instruction;
 
 typedef struct {
-    Instruction **date_instructions;
+    Instruction **data_instructions;
     int data_count;
-    Instruction **cpde_instructions;
+    Instruction **code_instructions;
     int code_count;
     HashMap *labels;
     HashMap *memory_locations;
