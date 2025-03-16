@@ -11,7 +11,6 @@
 #define TOMBSTONE ((void*)-1)
 
 extern int total_data_allocated;
-extern int total_code_allocated;
 
 typedef struct {
     char *mnemonic;
