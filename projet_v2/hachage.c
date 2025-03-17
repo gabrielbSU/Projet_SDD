@@ -108,6 +108,7 @@ void hashmap_destroy(HashMap *map) {
         for (int i = 0; i < map->size; i++) {
             if (map->table[i].key != NULL && map->table[i].key != TOMBSTONE) {
                 free(map->table[i].key);
+                free(map->table[i].value);
             }
         }
         free(map->table);

@@ -1,4 +1,4 @@
-#include "parse.h"
+#include "parser.h"
 
 int main(){
     ParserResult *res = parse("code.asm");
@@ -9,6 +9,8 @@ int main(){
     printf("x -> %i\n",  *(int*)hashmap_get(res->memory_locations, "x"));
     printf("arr -> %i\n",*(int*)hashmap_get(res->memory_locations, "arr"));
     printf("y -> %i\n",  *(int*)hashmap_get(res->memory_locations, "y"));
+
+    free_parser_result(res);
 
     return 0;
 }
