@@ -15,6 +15,10 @@ MemoryHandler *memory_init(int size) {
         return NULL;
     }
 
+    for (int i = 0; i < size; i++) {
+        handler->memory[i] = NULL;
+    }
+
     handler->total_size = size;
 
     Segment *free_segment = (Segment *)malloc(sizeof(Segment));
@@ -205,4 +209,19 @@ int remove_segment(MemoryHandler *handler, const char *name) {
     free(seg);
 
     return 1;
+}
+
+void memoryHandler_destroy(MemoryHandler *handler){
+    hashmap_destroy(handler->allocated);
+    Segment *seg = handler->free_list;
+    while (seg != NULL) {
+        Segment *tmp = seg->next;
+        free(seg);
+        seg = tmp;
+    }
+    for(int i = 0; i<handler->total_size; i++){
+        free(handler->memory[i]);
+    }
+    free(handler->memory);
+    free(handler);
 }

@@ -2,8 +2,6 @@
 #include <ctype.h>
 #include "cpu.h"
 
-
-
 CPU *cpu_init(int memory_size){
     CPU *cpu = (CPU*)malloc(sizeof(CPU));
     
@@ -19,6 +17,10 @@ CPU *cpu_init(int memory_size){
     int* BX = (int*)malloc(sizeof(int));
     int* CX = (int*)malloc(sizeof(int));
     int* DX = (int*)malloc(sizeof(int));
+    if(AX == NULL || BX == NULL ||CX == NULL || DX == NULL){
+        printf("Erreur d'allocation memoire\n");
+        return NULL;
+    }
     *AX = 0;
     *BX = 0;
     *CX = 0;
@@ -32,10 +34,8 @@ CPU *cpu_init(int memory_size){
 }
 void cpu_destroy(CPU *cpu){
     hashmap_destroy(cpu->context);
-    //todo: destroy memoryHandle
-    
+    memoryHandler_destroy(cpu->memory_handler);
     free(cpu);
-    return ;
 }
 void *store(MemoryHandler *handler,const char *segment_name,int pos, void*data){
     Segment *seg = (Segment*)hashmap_get(handler->allocated, segment_name);
@@ -43,13 +43,13 @@ void *store(MemoryHandler *handler,const char *segment_name,int pos, void*data){
         printf("Erreur, segment non trouvé\n");
         return NULL;
     }
-    if(pos>=seg->size){
-        printf("Erreur, la position dépasse la taille du segment\n");
+    if(pos>seg->size){
+        printf("Erreur, la position depasse la taille du segment\n");
         return NULL;
     }
     handler->memory[seg->start+pos] = data;
 
-    // return data pour verifier si store est executé avec succes.
+    // retourne data pour verifier si la fonction est executée avec succès, sinon retourne NULL.
     return data;
 }
 void *load(MemoryHandler *handler,const char *segment_name,int pos){
@@ -68,22 +68,32 @@ void allocate_variables(CPU *cpu, Instruction **data_instructions,int data_count
         }
         total_size += nb_comma+1;
     }
-
+    
     if(create_segment(cpu->memory_handler,"DS",0,total_size)==0){
-        printf("Echec de création_segment");
+        printf("Echec de création_segment\n");
         return;
     }
 
     int curr_offset = 0;
-    for(int i = 0; i<data_count; i++){
+    for (int i = 0; i < data_count; i++) {
         Instruction *inst = data_instructions[i];
-        char *data;
-        while(data!=NULL){
-            data = strtok(inst->operand2, ", ");
-            int *new_data = (int*)malloc(sizeof(int));
-            *new_data = *(int*)data;
-            store(cpu->memory_handler, "DS", curr_offset, new_data);
+        char *data = strtok(inst->operand2, ", ");
+        
+        while (data != NULL) {
+            int *new_data = (int *)malloc(sizeof(int));
+            if (new_data == NULL) {
+                printf("Erreur d'allocation memoire\n");
+                return;
+            }
+            
+            *new_data = atoi(data);
+            if(store(cpu->memory_handler, "DS", curr_offset, new_data)==NULL){
+                printf("Echec du stockage %s\n", data);
+                return;
+            }
             curr_offset++;
+            
+            data = strtok(NULL, ", ");
         }
     }
 }
@@ -91,6 +101,6 @@ void print_data_segment(CPU *cpu){
     Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "DS");
     for(int i = seg->start; i<seg->start+seg->size; i++){
         void *data = cpu->memory_handler->memory[i];
-        printf("%i\n", *(int*)data);
+        printf("DS %i: %i\n", i, *(int*)data);
     }
 }
