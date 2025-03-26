@@ -1,6 +1,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "cpu.h"
+#include <regex.h>
 
 CPU *cpu_init(int memory_size){
     CPU *cpu = (CPU*)malloc(sizeof(CPU));
@@ -12,6 +13,7 @@ CPU *cpu_init(int memory_size){
     
     cpu->memory_handler = memory_init(memory_size);
     cpu->context = hashmap_create();
+    cpu->constant_pool = hashmap_create();
 
     int* AX = (int*)malloc(sizeof(int));
     int* BX = (int*)malloc(sizeof(int));
@@ -34,6 +36,7 @@ CPU *cpu_init(int memory_size){
 }
 void cpu_destroy(CPU *cpu){
     hashmap_destroy(cpu->context);
+    hashmap_destroy(cpu->constant_pool);
     memoryHandler_destroy(cpu->memory_handler);
     free(cpu);
 }
@@ -104,3 +107,147 @@ void print_data_segment(CPU *cpu){
         printf("DS %i: %i\n", i, *(int*)data);
     }
 }
+
+int matches(const char *pattern, const char *string) {
+    regex_t regex;
+    int result = regcomp(&regex, pattern, REG_EXTENDED);
+    if (result) {
+        fprintf(stderr, "Regex compilation failed for pattern: %s\n", pattern);
+        return 0;
+    }
+    result = regexec(&regex, string, 0, NULL, 0);
+    regfree(&regex);  
+
+    return result == 0; // Retourne 1 si la correspondance est trouvée, sinon 0
+
+}
+
+void *immediate_addressing(CPU *cpu, const char *operand){
+    if(matches("^[A-Z]+ [A-Z]+,[0-9]+$", operand) == 0){
+        printf("Erreur de format\n");
+    }
+
+    char op[32];
+    strcpy(op, operand);
+
+    int* val = (int*)malloc(sizeof(int));
+    char *token1;
+    char *token2;
+    char *token3;
+    token1 = strtok(op, " ");
+    token1 = strtok(NULL, " ");
+
+    token2 = strtok(token1, ",");
+    token3 = strtok(NULL, ",");
+
+    *val = atoi(token3);
+
+
+    hashmap_insert(cpu->constant_pool, token2, val);
+    return val;
+
+}
+
+void *register_addressing(CPU *cpu, const char *operand){
+    if(matches("^[A-Z]+ [A-Z]+,[A-Z]+$", operand) == 0){
+        printf("Erreur de format\n");
+    }
+
+    char op[32];
+    strcpy(op, operand);
+
+    char *token1;
+    char *token2;
+    char *token3;
+    token1 = strtok(op, " ");
+    token1 = strtok(NULL, " ");
+
+    token2 = strtok(token1, ",");
+    token3 = strtok(NULL, ",");
+
+    void* val = hashmap_get(cpu->context, token3);
+    if(val == NULL){
+         printf("erreur, absence du registre\n");
+    }
+
+    return val;
+}
+
+void *memory_direct_addressing(CPU *cpu, const char *operand){
+    if(matches("^[A-Z]+ [A-Z]+,\[[0-9]+\]$", operand) == 0){
+        printf("Erreur de format\n");
+    }
+
+        char op[32];
+    strcpy(op, operand);
+
+    char *token1;
+    char *token2;
+    char *token3;
+    token1 = strtok(op, " ");
+    token1 = strtok(NULL, " ");
+
+    token2 = strtok(token1, ",");
+    token3 = strtok(NULL, ","); //[i]
+
+    token3 = strtok(token3, "[");
+    token3 = strtok(NULL, "[");
+    token3 = strtok(token3, "]");
+    
+    void* val = load(cpu->memory_handler, "DS", atoi(token3));
+    return val;
+}
+
+void *register_indirect_addressing(CPU *cpu, const char *operand){
+    if(matches("^[A-Z]+ [A-Z]+,\[[A-Z]+\]$", operand) == 0){
+        printf("Erreur de format\n");
+    }
+
+    char op[32];
+    strcpy(op, operand);
+
+    char *token1;
+    char *token2;
+    char *token3;
+    token1 = strtok(op, " ");
+    token1 = strtok(NULL, " ");
+
+    token2 = strtok(token1, ",");
+    token3 = strtok(NULL, ","); //[i]
+
+    token3 = strtok(token3, "[");
+    token3 = strtok(NULL, "[");
+    token3 = strtok(token3, "]");
+    
+    void* i = hashmap_get(cpu->context, token3);
+    void* val = load(cpu->memory_handler, "DS", *(int*)i);
+    return val;
+}
+
+void handle_MOV(CPU *cpu, void *src, void *dest){
+    memcpy(dest, src, sizeof(int));
+}
+
+void *resolve_adressing(CPU *cpu,const char *operand){
+    void *data = immediate_addressing(cpu, operand);
+    if(data != NULL){
+        return data;
+    }
+    data = register_addressing(cpu, operand);
+    if(data != NULL){
+        return data;
+    }
+    data = memory_direct_addressing(cpu, operand);
+    if(data != NULL){
+        return data;
+    }
+    data = register_indirect_addressing(cpu, operand);
+    if(data != NULL){
+        return data;
+    }
+
+    return NULL;
+}
+
+
+
