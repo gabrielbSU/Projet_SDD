@@ -36,22 +36,24 @@ CPU* setup_test_environment() {
 }
 
 int main(){
-    
-    ParserResult *res = parse("code.asm");
-
-    printf("start -> %i\n", *(int*)hashmap_get(res->labels, "start"));
-    printf("loop -> %i\n",*(int*)hashmap_get(res->labels, "loop"));
-
-    printf("x -> %i\n",  *(int*)hashmap_get(res->memory_locations, "x"));
-    printf("arr -> %i\n",*(int*)hashmap_get(res->memory_locations, "arr"));
-    printf("y -> %i\n",  *(int*)hashmap_get(res->memory_locations, "y"));
-
-    CPU *cpu = cpu_init(256);
-    allocate_variables(cpu, res->data_instructions, res->data_count);
+    CPU *cpu = setup_test_environment();
     print_data_segment(cpu);
+    
+    void * tok = resolve_adressing(cpu, "MOV AX,[CX]");
+    tok = resolve_adressing(cpu, "MOV AX,[AX]");
+    printf("MOV AX,[AX]: %i\n", *(int*)tok);
+    tok = resolve_adressing(cpu, "MOV AX,[8]");
+    printf("MOV AX,[8]: %i\n", *(int*)tok);
+    tok = resolve_adressing(cpu, "MOV AX,CX");
+    printf("MOV AX,CX: %i\n", *(int*)tok);
+    tok = resolve_adressing(cpu, "MOV AX,42");
+    printf("MOV AX,42: %i\n", *(int*)tok);
+
+    void *dest = hashmap_get(cpu->context, "AX");
+    handle_MOV(cpu, tok, dest);
+    printf("test MOV: %i %i\n", *(int*)tok, *(int*)resolve_adressing(cpu, "MOV AX,AX"));
 
     cpu_destroy(cpu);
-    free_parser_result(res);
     
     return 0;
 }

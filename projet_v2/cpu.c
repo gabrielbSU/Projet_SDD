@@ -1,7 +1,7 @@
 #include <string.h>
 #include <ctype.h>
-#include "cpu.h"
 #include <regex.h>
+#include "cpu.h"
 
 CPU *cpu_init(int memory_size){
     CPU *cpu = (CPU*)malloc(sizeof(CPU));
@@ -104,7 +104,9 @@ void print_data_segment(CPU *cpu){
     Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "DS");
     for(int i = seg->start; i<seg->start+seg->size; i++){
         void *data = cpu->memory_handler->memory[i];
-        printf("DS %i: %i\n", i, *(int*)data);
+        if(data!=NULL){
+            printf("DS %i: %i\n", i, *(int*)data);
+        }
     }
 }
 
@@ -124,7 +126,7 @@ int matches(const char *pattern, const char *string) {
 
 void *immediate_addressing(CPU *cpu, const char *operand){
     if(matches("^[A-Z]+ [A-Z]+,[0-9]+$", operand) == 0){
-        printf("Erreur de format\n");
+        return NULL;
     }
 
     char op[32];
@@ -133,16 +135,12 @@ void *immediate_addressing(CPU *cpu, const char *operand){
     int* val = (int*)malloc(sizeof(int));
     char *token1;
     char *token2;
-    char *token3;
-    token1 = strtok(op, " ");
-    token1 = strtok(NULL, " ");
+    token1 = strtok(op, " "); // mnemonic
+    token1 = strtok(NULL, " "); // operand1,operand2
+    token2 = strtok(token1, ","); // operand1
+    token1 = strtok(NULL, ","); // operand2
 
-    token2 = strtok(token1, ",");
-    token3 = strtok(NULL, ",");
-
-    *val = atoi(token3);
-
-
+    *val = atoi(token1);
     hashmap_insert(cpu->constant_pool, token2, val);
     return val;
 
@@ -150,77 +148,85 @@ void *immediate_addressing(CPU *cpu, const char *operand){
 
 void *register_addressing(CPU *cpu, const char *operand){
     if(matches("^[A-Z]+ [A-Z]+,[A-Z]+$", operand) == 0){
-        printf("Erreur de format\n");
+        return NULL;
     }
 
     char op[32];
     strcpy(op, operand);
 
     char *token1;
-    char *token2;
-    char *token3;
-    token1 = strtok(op, " ");
-    token1 = strtok(NULL, " ");
+    token1 = strtok(op, " "); // mnemonic
+    token1 = strtok(NULL, " "); // operand1,operand2
+    token1 = strtok(token1, ","); // operand1
+    token1 = strtok(NULL, ","); // operand2
 
-    token2 = strtok(token1, ",");
-    token3 = strtok(NULL, ",");
+    void* val = hashmap_get(cpu->context, token1);
 
-    void* val = hashmap_get(cpu->context, token3);
     if(val == NULL){
-         printf("erreur, absence du registre\n");
+        printf("Erreur, absence de valeur '%s' dans DS\n", token1);
+        return NULL;
     }
 
     return val;
 }
 
 void *memory_direct_addressing(CPU *cpu, const char *operand){
-    if(matches("^[A-Z]+ [A-Z]+,\[[0-9]+\]$", operand) == 0){
-        printf("Erreur de format\n");
+    if(matches("^[A-Z]+ [A-Z]+,\\[[0-9]+\\]$", operand) == 0){
+        return NULL;
     }
 
-        char op[32];
+    char op[32];
     strcpy(op, operand);
-
-    char *token1;
-    char *token2;
-    char *token3;
-    token1 = strtok(op, " ");
-    token1 = strtok(NULL, " ");
-
-    token2 = strtok(token1, ",");
-    token3 = strtok(NULL, ","); //[i]
-
-    token3 = strtok(token3, "[");
-    token3 = strtok(NULL, "[");
-    token3 = strtok(token3, "]");
     
-    void* val = load(cpu->memory_handler, "DS", atoi(token3));
+    char *token1;
+
+    token1 = strtok(op, " "); // mnemonic
+    token1 = strtok(NULL, " "); // operand1,[operand2]
+    token1 = strtok(token1, ","); // operand1
+    token1 = strtok(NULL, ","); // [operand2]
+    token1 = strtok(token1, "["); // operand2]
+    token1 = strtok(token1, "]"); // operand2
+
+    void* val = load(cpu->memory_handler, "DS", atoi(token1));
+    
+    if(val==NULL){
+        printf("Erreur, absence de valeur position '%s' dans DS\n", token1);
+        return NULL;
+    }
+    
     return val;
 }
 
 void *register_indirect_addressing(CPU *cpu, const char *operand){
-    if(matches("^[A-Z]+ [A-Z]+,\[[A-Z]+\]$", operand) == 0){
-        printf("Erreur de format\n");
+    if(matches("^[A-Z]+ [A-Z]+,\\[[A-Z]+\\]$", operand) == 0){
+        return NULL;
     }
 
     char op[32];
     strcpy(op, operand);
 
     char *token1;
-    char *token2;
-    char *token3;
-    token1 = strtok(op, " ");
-    token1 = strtok(NULL, " ");
-
-    token2 = strtok(token1, ",");
-    token3 = strtok(NULL, ","); //[i]
-
-    token3 = strtok(token3, "[");
-    token3 = strtok(NULL, "[");
-    token3 = strtok(token3, "]");
+    token1 = strtok(op, " "); // mnemonic
+    token1 = strtok(NULL, " "); // operand1,[operand2]
+    token1 = strtok(token1, ","); // operand1
+    token1 = strtok(NULL, ","); // [operand2]
+    token1 = strtok(token1, "["); // operand2]
+    token1 = strtok(token1, "]"); // operand2
     
-    void* i = hashmap_get(cpu->context, token3);
+    void* i = hashmap_get(cpu->context, token1);
+
+    if(i == NULL){
+        printf("Erreur, absence de valeur '%s' dans cpu->context\n", token1);
+        return NULL;
+    }
+
     void* val = load(cpu->memory_handler, "DS", *(int*)i);
+    
+    if(val==NULL){
+        printf("Erreur, absence de valeur position '%i' dans cpu->memory_handler\n", *(int*)i);
+        return NULL;
+    }
+
     return val;
 }
 
