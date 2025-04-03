@@ -19,7 +19,11 @@ CPU *cpu_init(int memory_size){
     int* BX = (int*)malloc(sizeof(int));
     int* CX = (int*)malloc(sizeof(int));
     int* DX = (int*)malloc(sizeof(int));
-    if(AX == NULL || BX == NULL ||CX == NULL || DX == NULL){
+    int* IP = (int*)malloc(sizeof(int));
+    int* ZF = (int*)malloc(sizeof(int));
+    int* SF = (int*)malloc(sizeof(int));
+
+    if(AX == NULL || BX == NULL ||CX == NULL || DX == NULL || IP == NULL || ZF == NULL || SF == NULL){
         printf("Erreur d'allocation memoire\n");
         return NULL;
     }
@@ -27,11 +31,17 @@ CPU *cpu_init(int memory_size){
     *BX = 0;
     *CX = 0;
     *DX = 0;
+    *IP = 0;
+    *ZF = 0;
+    *SF = 0;
 
     hashmap_insert(cpu->context, "AX", AX);
     hashmap_insert(cpu->context, "BX", BX);
     hashmap_insert(cpu->context, "CX", CX);
     hashmap_insert(cpu->context, "DX", DX);
+    hashmap_insert(cpu->context, "IP", IP);
+    hashmap_insert(cpu->context, "ZF", ZF);
+    hashmap_insert(cpu->context, "SF", SF);
     return cpu;
 }
 void cpu_destroy(CPU *cpu){
@@ -255,5 +265,204 @@ void *resolve_adressing(CPU *cpu,const char *operand){
     return NULL;
 }
 
+char *trim(char *str) {
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r') str++;
 
+    char *end = str + strlen(str) - 1;
+    while (end > str && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) {
+        *end = '\0';
+        end--;
+    }
 
+    return str;
+}
+
+int search_and_replace(char **str, HashMap *values) {
+    if (!str || !*str || !values) return 0;
+
+    int replaced = 0;
+    char *input = *str;
+
+    // Iterate through all keys in the hashmap
+    for (int i = 0; i < values->size; i++) {
+        if (values->table[i].key && values->table[i].key != (void *)-1) {
+            char *key = values->table[i].key;
+            int value = *(int*)values->table[i].value;  // todo : erreur ici
+
+            // Find potential substring match
+            char *substr = strstr(input, key);
+
+            if (substr) {
+                // Construct replacement buffer
+                char replacement[64];
+                snprintf(replacement, sizeof(replacement), "%d", value);
+
+                // Calculate lengths
+                int key_len = strlen(key);
+                int repl_len = strlen(replacement);
+                //int remain_len = strlen(substr + key_len);
+
+                // Create new string
+                char *new_str = (char *)malloc(strlen(input) - key_len + repl_len + 1);
+                strncpy(new_str, input, substr - input);
+
+                new_str[substr - input] = '\0';
+
+                strcat(new_str, replacement);
+                strcat(new_str, substr + key_len);
+                // Free and update original string
+                free(input);
+                *str = new_str;
+                input = new_str;
+
+                replaced = 1;
+            }
+        }
+    }
+
+    // Trim the final string
+    if (replaced) {
+        char *trimmed = trim(input);
+        if (trimmed != input) {
+            memmove(input, trimmed, strlen(trimmed) + 1);
+        }
+    }
+
+    return replaced;
+}
+
+int resolve_constants(ParserResult *result){
+    for(int i = 0; i< result->data_count; i++){
+        if(result->code_instructions[i]->operand2 == NULL){
+            void* val = hashmap_get(result->labels, result->code_instructions[i]->operand1);
+            if(val==NULL){
+                printf("Erreur, Label %s non trouvé\n", result->code_instructions[i]->operand1);
+                return 0;
+            }
+            
+            char str[20];
+            sprintf(str, "%d", *(int*)val);
+            free(result->code_instructions[i]->operand1);
+            result->code_instructions[i]->operand1 = strdup(str);
+        }else if(search_and_replace(&result->code_instructions[i]->operand2, result->memory_locations) == 0){
+            printf("Erreur, operand %s non trouvé\n", result->code_instructions[i]->operand2);
+            return 0;
+        } 
+    }
+    return 1;
+}
+
+void allocate_code_segment(CPU *cpu, Instruction **code_instructions, int code_count){
+    Segment *ds = (Segment*)hashmap_get(cpu->memory_handler->allocated, "DS");
+
+    if(create_segment(cpu->memory_handler,"CS",ds->size,code_count)==0){
+        printf("Echec de création_segment\n");
+        return;
+    }
+    for(int i = 0; i<code_count; i++){
+        int *val = 
+        store(cpu->memory_handler, "CS", i, code_instructions[i]);
+    }
+
+    void* ip = hashmap_get(cpu->context, "IP");
+    *(int*)ip = 0;
+}
+
+int handle_instruction(CPU *cpu, Instruction *instr, void *src, void *dest){
+    if(strcmp(instr->mnemonic, "MOV")==0){
+        handle_MOV(cpu, src, dest);
+        return 1;
+    }else if(strcmp(instr->mnemonic, "ADD")==0){
+        *(int*)dest += *(int*)src;
+        return 1;
+    }else if(strcmp(instr->mnemonic, "CMP")==0){
+        int cmp = *(int*)dest-*(int*)src;
+        if(cmp == 0){
+            void* zf = hashmap_get(cpu->context, "ZF");
+            *(int*)zf = 1;
+
+            void* sf = hashmap_get(cpu->context, "SF");
+            *(int*)sf = 0;
+        }else if(cmp < 0){
+            void* sf = hashmap_get(cpu->context, "SF");
+            *(int*)sf = 1;
+
+            void* zf = hashmap_get(cpu->context, "ZF");
+            *(int*)zf = 0;
+        }
+        return 1;
+    }else if(strcmp(instr->mnemonic, "JMP")==0){
+        void* ip = hashmap_get(cpu->context, "IP");
+        *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1);
+        return 1;
+    }else if(strcmp(instr->mnemonic, "JZ")==0){
+        void* zf = hashmap_get(cpu->context, "ZF");
+        if(*(int*)zf == 1){
+            void* ip = hashmap_get(cpu->context, "IP");
+            *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1);
+        }
+        return 1;
+    }else if(strcmp(instr->mnemonic, "JNZ") == 0){
+        void* zf = hashmap_get(cpu->context, "ZF");
+        if(*(int*)zf == 0){
+            void* ip = hashmap_get(cpu->context, "ip");
+            *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1);
+        }
+        return 1;
+    }else if(strcmp(instr->mnemonic, "HALT")==0){
+        void* ip = hashmap_get(cpu->context, "IP");
+        Segment *cs = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
+
+        todo : *(int*)ip = cs->size;
+        return 1; 
+    }
+
+    return 0;
+}
+
+int execute_instruction(CPU *cpu, Instruction *instr){
+    void* src =  resolve_adressing(cpu, instr->operand2);
+    void* dest =  resolve_adressing(cpu, instr->operand1);
+    return handle_instruction(cpu, instr, src, dest);
+}
+
+Instruction *fetch_next_instruction(CPU *cpu){
+    void* ip = hashmap_get(cpu->context, "IP");
+
+    void* inst = load(cpu->memory_handler, "CS", *(int*)ip);    
+
+    *(int*)ip +=1;
+
+    return inst;
+}
+
+void print_registers(CPU *cpu){
+    void *reg = hashmap_get(cpu->context, "AX");
+    printf("AX -> %i\n", *(int*)reg);
+    reg = hashmap_get(cpu->context, "BX");
+    printf("BX -> %i\n", *(int*)reg);
+    reg = hashmap_get(cpu->context, "CX");
+    printf("CX -> %i\n", *(int*)reg);
+    reg = hashmap_get(cpu->context, "DX");
+    printf("DX -> %i\n", *(int*)reg);
+    reg = hashmap_get(cpu->context, "IP");
+    printf("IP -> %i\n", *(int*)reg);
+    reg = hashmap_get(cpu->context, "ZF");
+    printf("ZF -> %i\n", *(int*)reg);
+    reg = hashmap_get(cpu->context, "SF");
+    printf("SF -> %i\n", *(int*)reg);
+}
+
+int run_program(CPU *cpu){
+    printf("--Etat initial--\n");
+    print_data_segment(cpu);
+    print_registers(cpu);
+
+    printf("Execution...\n");
+    Instruction * inst = fetch_next_instruction(cpu);
+    execute_instruction(cpu, inst);
+
+    printf("--Etat Final--\n");
+    print_data_segment(cpu);
+    print_registers(cpu);
+}

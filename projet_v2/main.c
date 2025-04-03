@@ -36,6 +36,8 @@ CPU* setup_test_environment() {
 }
 
 int main(){
+    /*
+    
     CPU *cpu = setup_test_environment();
     print_data_segment(cpu);
     
@@ -54,6 +56,44 @@ int main(){
     printf("test MOV: %i %i\n", *(int*)tok, *(int*)resolve_adressing(cpu, "MOV AX,AX"));
 
     cpu_destroy(cpu);
+    */
+
+    ParserResult *res = parse("code.asm");
+
+    //printf("start -> %i\n", *(int*)hashmap_get(res->labels, "start"));
+    //printf("loop -> %i\n\n",*(int*)hashmap_get(res->labels, "loop"));
+//
+    //printf("x -> %i\n",  *(int*)hashmap_get(res->memory_locations, "x"));
+    //printf("arr -> %i\n",*(int*)hashmap_get(res->memory_locations, "arr"));
+    //printf("y -> %i\n",  *(int*)hashmap_get(res->memory_locations, "y"));
+
+    //for(int i = 0; i< res->data_count; i++){
+    //    printf("%s %s %s\n",res->code_instructions[i]->mnemonic, res->code_instructions[i]->operand1, res->code_instructions[i]->operand2);
+    //}
+
+    resolve_constants(res);
+
+    //for(int i = 0; i< res->data_count; i++){
+    //    printf("%s %s %s\n",res->code_instructions[i]->mnemonic, res->code_instructions[i]->operand1, res->code_instructions[i]->operand2);
+    //}
+
+    CPU *cpu = cpu_init(256*8);
+    allocate_variables(cpu, res->data_instructions, res->data_count);
+
+    allocate_code_segment(cpu, res->code_instructions, res->code_count);
+
+    Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
+    for(int i = seg->start; i<seg->start+seg->size; i++){
+        void *data = cpu->memory_handler->memory[i];
+        if(data!=NULL){
+            printf("DS %i: %i\n", i, *(int*)data);
+        }
+    }
+
     
+
+    cpu_destroy(cpu);
+    free_parser_result(res);
+
     return 0;
 }
