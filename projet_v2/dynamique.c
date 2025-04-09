@@ -48,7 +48,6 @@ MemoryHandler *memory_init(int size) {
 Segment *find_free_segment(MemoryHandler* handler,int start,int size,Segment** prev){
     Segment *current = handler->free_list;
     *prev=NULL; // Initialiser le pointeur précédent à NULL
-    printf("seg : %d %d\n", start, size);
     while (current !=NULL){
         if (current->start<=start && (current->start + current->size)>= (start + size)){
             return current;

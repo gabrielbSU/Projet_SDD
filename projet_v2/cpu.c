@@ -19,11 +19,15 @@ CPU *cpu_init(int memory_size){
     int* BX = (int*)malloc(sizeof(int));
     int* CX = (int*)malloc(sizeof(int));
     int* DX = (int*)malloc(sizeof(int));
+
     int* IP = (int*)malloc(sizeof(int));
     int* ZF = (int*)malloc(sizeof(int));
     int* SF = (int*)malloc(sizeof(int));
 
-    if(AX == NULL || BX == NULL ||CX == NULL || DX == NULL || IP == NULL || ZF == NULL || SF == NULL){
+    int* SP = (int*)malloc(sizeof(int));
+    int* BP = (int*)malloc(sizeof(int));
+
+    if(AX == NULL || BX == NULL ||CX == NULL || DX == NULL || IP == NULL || ZF == NULL || SF == NULL || SP == NULL || BP == NULL){
         printf("Erreur d'allocation memoire\n");
         return NULL;
     }
@@ -31,7 +35,11 @@ CPU *cpu_init(int memory_size){
     *BX = 0;
     *CX = 0;
     *DX = 0;
+
     *IP = 0;
+    *ZF = 0;
+    *SF = 0;
+
     *ZF = 0;
     *SF = 0;
 
@@ -39,9 +47,19 @@ CPU *cpu_init(int memory_size){
     hashmap_insert(cpu->context, "BX", BX);
     hashmap_insert(cpu->context, "CX", CX);
     hashmap_insert(cpu->context, "DX", DX);
+
     hashmap_insert(cpu->context, "IP", IP);
     hashmap_insert(cpu->context, "ZF", ZF);
     hashmap_insert(cpu->context, "SF", SF);
+
+    hashmap_insert(cpu->context, "SP", SP);
+    hashmap_insert(cpu->context, "BP", BP);
+
+    //if(create_segment(cpu->memory_handler,"SS",0,128)==0){ //todo
+    //    printf("Echec de création_segment\n");
+    //    return;
+    //}
+
     return cpu;
 }
 void cpu_destroy(CPU *cpu){
@@ -287,7 +305,7 @@ int search_and_replace(char **str, HashMap *values) {
     for (int i = 0; i < values->size; i++) {
         if (values->table[i].key && values->table[i].key != (void *)-1) {
             char *key = values->table[i].key;
-            int value = *(int*)values->table[i].value;  // todo : erreur ici
+            int value = *(int*)values->table[i].value;
 
             // Find potential substring match
             char *substr = strstr(input, key);
@@ -360,7 +378,7 @@ void allocate_code_segment(CPU *cpu, Instruction **code_instructions, int code_c
         return;
     }
     for(int i = 0; i<code_count; i++){
-        int *val = 
+        //int *val = 
         store(cpu->memory_handler, "CS", i, code_instructions[i]);
     }
 
@@ -405,7 +423,7 @@ int handle_instruction(CPU *cpu, Instruction *instr, void *src, void *dest){
     }else if(strcmp(instr->mnemonic, "JNZ") == 0){
         void* zf = hashmap_get(cpu->context, "ZF");
         if(*(int*)zf == 0){
-            void* ip = hashmap_get(cpu->context, "ip");
+            void* ip = hashmap_get(cpu->context, "IP");
             *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1);
         }
         return 1;
@@ -413,7 +431,7 @@ int handle_instruction(CPU *cpu, Instruction *instr, void *src, void *dest){
         void* ip = hashmap_get(cpu->context, "IP");
         Segment *cs = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
 
-        todo : *(int*)ip = cs->size;
+        *(int*)ip = cs->size;
         return 1; 
     }
 
@@ -465,4 +483,28 @@ int run_program(CPU *cpu){
     printf("--Etat Final--\n");
     print_data_segment(cpu);
     print_registers(cpu);
+}
+
+int push_value(CPU *cpu, int value){
+    void *sp = hashmap_get(cpu->context, "SP");
+    if(sp == NULL){
+        return -1;
+    }
+    if(*(int*)sp==128){
+        //print stack overflow
+        return -1;
+    }
+    *(int*)sp -=1;
+}
+
+int pop_value(CPU *cpu, int *dest){
+    void *sp = hashmap_get(cpu->context, "SP");
+    if(sp == NULL){
+        return -1;
+    }
+    if(*(int*)sp==0){
+        //print stack overflow
+        return -1;
+    }
+    *(int*)sp +=1;
 }

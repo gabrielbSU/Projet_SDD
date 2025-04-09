@@ -82,11 +82,14 @@ int main(){
 
     allocate_code_segment(cpu, res->code_instructions, res->code_count);
 
+    print_data_segment(cpu);
+
     Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
     for(int i = seg->start; i<seg->start+seg->size; i++){
         void *data = cpu->memory_handler->memory[i];
+        Instruction* inst = (Instruction*)data;
         if(data!=NULL){
-            printf("DS %i: %i\n", i, *(int*)data);
+            printf("CS %i: %s\n", i, inst->operand2);
         }
     }
 
