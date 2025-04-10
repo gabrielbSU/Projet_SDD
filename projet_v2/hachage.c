@@ -1,4 +1,7 @@
+#include <stdlib.h>
+#include <string.h>
 #include "hachage.h"
+#include "logger.h"
 
 unsigned long simple_hash(const char *str) {
     unsigned long hash = 0;
@@ -9,15 +12,16 @@ unsigned long simple_hash(const char *str) {
 }
 
 HashMap *hashmap_create() {
+    // Allocation de la table de hachage
     HashMap *hash = (HashMap*)malloc(sizeof(HashMap));
     if (hash == NULL) { 
-        printf("Erreur d'allocation mémoire\n");
+        LOG_ERROR("Erreur d'allocation mémoire");
         return NULL;
     }
     hash->size = TABLE_SIZE;
     hash->table = (HashEntry*)malloc(sizeof(HashEntry) * TABLE_SIZE);
     if (hash->table == NULL) { 
-        printf("Erreur d'allocation mémoire\n");
+        LOG_ERROR("Erreur d'allocation mémoire");
         free(hash);
         return NULL;
     }
@@ -59,7 +63,7 @@ int hashmap_insert(HashMap *map, const char *key, void *value) {
 
 void *hashmap_get(HashMap *map, const char *key) {
     if (map == NULL || key == NULL) {
-        printf("Erreur, map est null\n");
+        LOG_ERROR("Erreur, HashMap est null ou la clé est nulle");
         return NULL;
     }
     unsigned int index = simple_hash(key) % map->size;
@@ -79,7 +83,7 @@ void *hashmap_get(HashMap *map, const char *key) {
 
 int hashmap_remove(HashMap *map, const char *key) {
      if (map == NULL || key == NULL) {
-        printf("Erreur : paramètres invalides\n");
+        LOG_ERROR("Erreur : paramètres invalides");
         return 0;
     }
     unsigned int index = simple_hash(key) % map->size;
@@ -105,7 +109,9 @@ void hashmap_destroy(HashMap *map) {
         return;
     }
     if (map->table != NULL) {
+        // Libérer chaque entrée de la table
         for (int i = 0; i < map->size; i++) {
+            // Libérer la clé et la valeur si elles existent
             if (map->table[i].key != NULL && map->table[i].key != TOMBSTONE) {
                 free(map->table[i].key);
                 free(map->table[i].value);

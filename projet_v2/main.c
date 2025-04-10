@@ -1,6 +1,7 @@
+#include <stdlib.h>
 #include "parser.h"
 #include "cpu.h"
-
+#include "logger.h"
 CPU* setup_test_environment() {
     // Initialiser le CPU
     CPU* cpu = cpu_init(1024);
@@ -73,25 +74,26 @@ int main(){
 
     resolve_constants(res);
 
-    //for(int i = 0; i< res->data_count; i++){
-    //    printf("%s %s %s\n",res->code_instructions[i]->mnemonic, res->code_instructions[i]->operand1, res->code_instructions[i]->operand2);
-    //}
+    for(int i = 0; i< res->data_count; i++){
+        printf("%s %s %s\n",res->code_instructions[i]->mnemonic, res->code_instructions[i]->operand1, res->code_instructions[i]->operand2);
+    }
 
     CPU *cpu = cpu_init(256*8);
     allocate_variables(cpu, res->data_instructions, res->data_count);
-
     allocate_code_segment(cpu, res->code_instructions, res->code_count);
 
-    print_data_segment(cpu);
+    run_program(cpu);
 
-    Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
-    for(int i = seg->start; i<seg->start+seg->size; i++){
-        void *data = cpu->memory_handler->memory[i];
-        Instruction* inst = (Instruction*)data;
-        if(data!=NULL){
-            printf("CS %i: %s\n", i, inst->operand2);
-        }
-    }
+    //print_data_segment(cpu);
+
+    //Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
+    //for(int i = seg->start; i<seg->start+seg->size; i++){
+    //    void *data = cpu->memory_handler->memory[i];
+    //    Instruction* inst = (Instruction*)data;
+    //    if(data!=NULL){
+    //        printf("CS %i: %s\n", i, inst->operand2);
+    //    }
+    //}
 
     
 

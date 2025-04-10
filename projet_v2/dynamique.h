@@ -1,9 +1,6 @@
 #ifndef DYNAMIQUE_H
 #define DYNAMIQUE_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "hachage.h"
 
 typedef struct segment {

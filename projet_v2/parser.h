@@ -1,9 +1,6 @@
-#ifndef PARSE_H
-#define PARSE_H
+#ifndef PARSER_H
+#define PARSER_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "hachage.h"
 #include "dynamique.h"
 

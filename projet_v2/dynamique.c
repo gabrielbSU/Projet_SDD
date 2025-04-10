@@ -1,29 +1,34 @@
+#include <stdlib.h>
+#include <string.h>
 #include "dynamique.h"
+#include "parser.h"
+#include "logger.h"
 
 MemoryHandler *memory_init(int size) {
-
+    // Initialisation du gestionnaire de mémoire
     MemoryHandler *handler = (MemoryHandler *)malloc(sizeof(MemoryHandler));
     if (handler == NULL) {
-        printf("Erreur d'allocation mémoire pour le gestionnaire\n");
+        LOG_ERROR("échec d'allocation mémoire pour le gestionnaire");
         return NULL;
     }
-
+    // Initialisation de la mémoire du gestionnaire
     handler->memory = (void **)malloc(size * sizeof(void *));
     if (handler->memory == NULL) {
-        printf("Erreur d'allocation mémoire pour le tableau de mémoire\n");
+        LOG_ERROR("échec d'allocation mémoire pour le tableau de mémoire");
         free(handler);
         return NULL;
     }
-
+    // Initialisation de la mémoire à NULL
     for (int i = 0; i < size; i++) {
         handler->memory[i] = NULL;
     }
+    handler->total_size = size; // Initialisation de la taille totale de la mémoire
 
-    handler->total_size = size;
 
+    // Initialisation de la liste des segments libres
     Segment *free_segment = (Segment *)malloc(sizeof(Segment));
     if (free_segment == NULL) {
-        printf("Erreur d'allocation mémoire pour le segment libre\n");
+        LOG_ERROR("échec d'allocation mémoire pour le segment libre");
         free(handler->memory);
         free(handler);
         return NULL;
@@ -33,36 +38,38 @@ MemoryHandler *memory_init(int size) {
     free_segment->next = NULL;
     handler->free_list = free_segment;
 
+    // Initialisation de la table de hachage pour les segments alloués
     handler->allocated = hashmap_create();
     if (handler->allocated == NULL) {
-        printf("Erreur d'initialisation de la table de hachage\n");
+        LOG_ERROR("échec d'initialisation de la table de hachage");
         free(free_segment);
         free(handler->memory);
         free(handler);
         return NULL;
     }
 
-    return handler;
+    return handler; // Retourne le gestionnaire de mémoire initialisé
 }
 
 Segment *find_free_segment(MemoryHandler* handler,int start,int size,Segment** prev){
     Segment *current = handler->free_list;
     *prev=NULL; // Initialiser le pointeur précédent à NULL
     while (current !=NULL){
+        // Vérifier si le segment libre est suffisamment grand et s'il est dans la plage demandée
         if (current->start<=start && (current->start + current->size)>= (start + size)){
             return current;
         }
-        *prev = current;
-        current =current ->next;
+        *prev = current; // Mettre à jour le pointeur précédent
+        current =current ->next; // Passer au segment suivant
     }
 
-    return NULL;
+    return NULL; // Aucun segment libre trouvé
 }
 
 int create_segment(MemoryHandler *handler, const char *name, int start, int size) {
     // Vérifier les paramètres
     if (handler == NULL || name == NULL || size <= 0 || start < 0) {
-        printf("Erreur : paramètres invalides\n");
+        LOG_ERROR("paramètres invalides pour la création du segment");
         return 0;
     }
 
@@ -70,14 +77,14 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
     Segment *prev;
     Segment *free_segment = find_free_segment(handler, start, size, &prev);
     if (free_segment == NULL) {
-        printf("Erreur : aucun segment libre trouvé pour l'allocation\n");
+        LOG_ERROR("aucun segment libre trouvé pour l'allocation");
         return 0;
     }
 
     // Créer un nouveau segment alloué
     Segment *new_seg = (Segment *)malloc(sizeof(Segment));
     if (new_seg == NULL) {
-        printf("Erreur d'allocation mémoire pour le nouveau segment\n");
+        LOG_ERROR("échec d'allocation mémoire pour le nouveau segment");
         return 0;
     }
     new_seg->start = start;
@@ -85,7 +92,7 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
     new_seg->next = NULL;
 
     if (hashmap_insert(handler->allocated, name, new_seg) != 1) {
-        printf("Erreur : impossible d'ajouter le segment à la table de hachage\n");
+        LOG_ERROR("impossible d'ajouter le segment à la table de hachage");
         free(new_seg);
         return 0;
     }
@@ -94,7 +101,7 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
     if (free_segment->start < start) {
         Segment *before = (Segment *)malloc(sizeof(Segment));
         if (before == NULL) {
-            printf("Erreur d'allocation mémoire pour le segment libre avant\n");
+            LOG_ERROR("Erreur d'allocation mémoire pour le segment libre avant");
             return 0;
         }
         before->start = free_segment->start;
@@ -113,7 +120,7 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
     if (free_segment->start + free_segment->size > start + size) {
         Segment *after = (Segment *)malloc(sizeof(Segment));
         if (after == NULL) {
-            printf("Erreur d'allocation mémoire pour le segment libre après\n");
+            LOG_ERROR("Erreur d'allocation mémoire pour le segment libre après");
             return 0;
         }
         after->start = start + size;
@@ -136,27 +143,27 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
 int remove_segment(MemoryHandler *handler, const char *name) {
     // Vérifier les paramètres
     if (handler == NULL || name == NULL) {
-        printf("Erreur : paramètres invalides\n");
+        LOG_ERROR("Erreur : paramètres invalides");
         return 0;
     }
 
     // Rechercher le segment alloué dans la table de hachage
     Segment *seg = (Segment *)hashmap_get(handler->allocated, name);
     if (seg == NULL) {
-        printf("Erreur : segment alloué non trouvé\n");
+        LOG_ERROR("Erreur : segment alloué non trouvé");
         return 0;
     }
 
     // Retirer le segment de la table de hachage
     if (hashmap_remove(handler->allocated, name) != 1) {
-        printf("Erreur : impossible de retirer le segment de la table de hachage\n");
+        LOG_ERROR("Erreur : impossible de retirer le segment de la table de hachage");
         return 0;
     }
 
     // Ajouter le segment libéré à la liste des segments libres
     Segment *new_free = (Segment *)malloc(sizeof(Segment));
     if (new_free == NULL) {
-        printf("Erreur d'allocation mémoire pour le segment libre\n");
+        LOG_ERROR("Erreur d'allocation mémoire pour le segment libre");
         return 0;
     }
     new_free->start = seg->start;
@@ -199,7 +206,7 @@ int remove_segment(MemoryHandler *handler, const char *name) {
         current = current->next;
     }
 
-   // Si la liste des segments libres est vide, ajouter le nouveau segment libre
+    // Si la liste des segments libres est vide, ajouter le nouveau segment libre
     if (handler->free_list == NULL) {
         handler->free_list = new_free;
     }
@@ -211,6 +218,27 @@ int remove_segment(MemoryHandler *handler, const char *name) {
 }
 
 void memoryHandler_destroy(MemoryHandler *handler){
+    // Libération de la mémoire allouée pour les segments de données
+    Segment *DS = (Segment*)hashmap_get(handler->allocated, "DS");
+    for(int i = 0; i<DS->size; i++){
+        free(handler->memory[DS->start+i]);
+    }
+
+    // Libération de la mémoire allouée pour les segments de données
+    Segment *CS = (Segment*)hashmap_get(handler->allocated, "CS");
+    for(int i = 0; i<CS->size; i++){
+        Instruction *inst = (Instruction *)handler->memory[CS->start+i];
+        if(inst == NULL){
+            continue;
+        }        
+        free(inst->mnemonic);
+        free(inst->operand1);
+
+        free(inst->operand2);
+        free(inst);
+    }
+
+    // Libération de la mémoire allouée pour le gestionnaire de mémoire
     hashmap_destroy(handler->allocated);
     Segment *seg = handler->free_list;
     while (seg != NULL) {
@@ -218,9 +246,7 @@ void memoryHandler_destroy(MemoryHandler *handler){
         free(seg);
         seg = tmp;
     }
-    for(int i = 0; i<handler->total_size; i++){
-        free(handler->memory[i]);
-    }
-    free(handler->memory);
-    free(handler);
+
+    free(handler->memory); // Libération de la mémoire allouée pour le tableau de mémoire
+    free(handler); // Libération du gestionnaire de mémoire
 }

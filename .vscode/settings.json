@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.py": "python",
+        "logger.h": "c",
+        "cpu.h": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "parser.h": "c"
+    }
+}

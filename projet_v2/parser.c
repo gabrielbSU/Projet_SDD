@@ -1,29 +1,37 @@
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include "parser.h"
+#include "logger.h"
 
-int total_data_allocated = 0;
+int total_data_allocated = 0; // compteur de la taille totale des données
 
 Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
+    // Allocation de la structure Instruction
     Instruction *new_i = (Instruction *)malloc(sizeof(Instruction));
     int *allocated_ptr = (int *)malloc(sizeof(int));
 
     if(new_i == NULL || allocated_ptr == NULL){
-        printf("Erreur d'allocation mémoire\n");
+        LOG_ERROR("échec d'allocation mémoire");
         return NULL;
     }
 
     char mnemonic[32];
     char operand1[32];
     char operand2[32];
+    // Extraction des champs de l'instruction
+    // On suppose que l'instruction est de la forme "mnemonic operand1 operand2"
     sscanf(line,"%s %s %s",mnemonic, operand1, operand2);
     new_i->mnemonic = strdup(mnemonic);
     new_i->operand1 = strdup(operand1);
     new_i->operand2 = strdup(operand2);
 
-    *allocated_ptr = total_data_allocated;
-    hashmap_insert(memory_locations, new_i->mnemonic,allocated_ptr);
+    
+    *allocated_ptr = total_data_allocated; // On stocke l'adresse de la donnée
+    hashmap_insert(memory_locations, new_i->mnemonic,allocated_ptr); // On insère dans le hashmap
 
+    // On compte le nombre de virgules dans l'opérande 2 (c'est-à-dire le nombre de données)
+    // On suppose que l'opérande 2 est de la forme "data1,data2,data3..."
     int nb_comma = 0;
     for(int i = 0; i<strlen(operand2); i++){
         if(operand2[i] == ','){
@@ -31,41 +39,43 @@ Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
         }
     }
 
-    total_data_allocated+=nb_comma+1;
-    return new_i;
+    total_data_allocated+=nb_comma+1; // On met à jour le compteur de la taille totale des données
+    return new_i; // On retourne l'instruction
 }
 
 Instruction *parse_code_instruction(const char *line,HashMap *labels,int code_count){
+    // Allocation de la structure Instruction
     Instruction *new_i = (Instruction *)malloc(sizeof(Instruction));
     if(new_i == NULL){
-        printf("Erreur d'allocation mémoire\n");
+        LOG_ERROR("échec d'allocation mémoire");
         return NULL;
     }
     char token1[32];
     char token2[32];
     char token3[32];
 
+    // Extraction des champs de l'instruction
     sscanf(line,"%s %s %s",token1, token2, token3);
     
-    if(token1[strlen(token1)-1] == ':'){
+    if(token1[strlen(token1)-1] == ':'){ // si le premier token est un label
+        // On supprime le ':' à la fin du label
         token1[strlen(token1)-1] = '\0';
-
+        
         int *allocated_ptr = (int *)malloc(sizeof(int));
         if(allocated_ptr == NULL){
-            printf("Erreur d'allocation mémoire\n");
+            LOG_ERROR("échec d'allocation mémoire");
             return NULL;
         }
         *allocated_ptr = code_count;
+        hashmap_insert(labels,token1,allocated_ptr);  // On insère le code_count dans le hashmap
 
-        hashmap_insert(labels,token1,allocated_ptr);
+        new_i->mnemonic = strdup(token2); // On récupère le mnemonique
 
-        new_i->mnemonic = strdup(token2);
-
+        // On récupère les opérandes
         char *operand1;
         char *operand2;
         operand1 = strtok(token3, ", ");
-        operand2 = strtok(NULL, ", "); 
-
+        operand2 = strtok(NULL, ", ");
         new_i->operand1 = strdup(operand1);
         new_i->operand2 = strdup(operand2);
     }else{
@@ -76,9 +86,11 @@ Instruction *parse_code_instruction(const char *line,HashMap *labels,int code_co
         operand1 = strtok(token2, ", ");
         operand2 = strtok(NULL, ", "); 
         new_i->operand1 = strdup(operand1);
-        new_i->operand2 = NULL;
+        
         if(operand2!=NULL){
             new_i->operand2 = strdup(operand2);
+        }else{
+            new_i->operand2 = strdup("");
         }
         
     }
@@ -103,12 +115,12 @@ ParserResult *parse(const char*filename){
     new_r->data_count = 0;
     new_r->code_count = 0;
     if(new_r == NULL){
-        printf("Erreur d'allocation mémoire\n");
+        LOG_ERROR("échec d'allocation mémoire");
         return NULL;
     }
     FILE* f = fopen(filename, "r");
     if(f==NULL){
-        printf("erreur à l'ouverture du fichier %s\n", filename);
+        LOG_ERROR("échec à l'ouverture du fichier %s", filename);
         return NULL;
     }
     char buffer[64];
