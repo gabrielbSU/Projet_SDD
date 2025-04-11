@@ -5,8 +5,6 @@
 #include "dynamique.h"
 #include "parser.h"
 
-
-
 typedef struct {
     MemoryHandler* memory_handler; //Gestionnaire de memoire
     HashMap *context; //Registres (AX, BX, CX, DX)

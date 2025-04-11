@@ -59,7 +59,7 @@ int main(){
     cpu_destroy(cpu);
     */
 
-    ParserResult *res = parse("code.asm");
+    ParserResult *res = parse("fibonacci.asm");
 
     //printf("start -> %i\n", *(int*)hashmap_get(res->labels, "start"));
     //printf("loop -> %i\n\n",*(int*)hashmap_get(res->labels, "loop"));
@@ -72,9 +72,11 @@ int main(){
     //    printf("%s %s %s\n",res->code_instructions[i]->mnemonic, res->code_instructions[i]->operand1, res->code_instructions[i]->operand2);
     //}
 
-    resolve_constants(res);
+    if(resolve_constants(res)==0){
+        return 1;
+    };
 
-    for(int i = 0; i< res->data_count; i++){
+    for(int i = 0; i< res->code_count; i++){
         printf("%s %s %s\n",res->code_instructions[i]->mnemonic, res->code_instructions[i]->operand1, res->code_instructions[i]->operand2);
     }
 

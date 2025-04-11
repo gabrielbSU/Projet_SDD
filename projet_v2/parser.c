@@ -1,20 +1,16 @@
 #include <string.h>
 #include <ctype.h>
-#include <stdlib.h>
 #include "parser.h"
 #include "logger.h"
 
-int total_data_allocated = 0; // compteur de la taille totale des données
+int total_data_allocated = 0; // compteur de la taille totale des donnees
 
 Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
     // Allocation de la structure Instruction
     Instruction *new_i = (Instruction *)malloc(sizeof(Instruction));
     int *allocated_ptr = (int *)malloc(sizeof(int));
 
-    if(new_i == NULL || allocated_ptr == NULL){
-        LOG_ERROR("échec d'allocation mémoire");
-        return NULL;
-    }
+    LOG_ASSERT(!(new_i == NULL || allocated_ptr == NULL), "echec d'allocation memoire");
 
     char mnemonic[32];
     char operand1[32];
@@ -27,11 +23,11 @@ Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
     new_i->operand2 = strdup(operand2);
 
     
-    *allocated_ptr = total_data_allocated; // On stocke l'adresse de la donnée
-    hashmap_insert(memory_locations, new_i->mnemonic,allocated_ptr); // On insère dans le hashmap
+    *allocated_ptr = total_data_allocated; // On stocke l'adresse de la donnee
+    hashmap_insert(memory_locations, new_i->mnemonic,allocated_ptr); // On insere dans le hashmap
 
-    // On compte le nombre de virgules dans l'opérande 2 (c'est-à-dire le nombre de données)
-    // On suppose que l'opérande 2 est de la forme "data1,data2,data3..."
+    // On compte le nombre de virgules dans l'operande 2 (c'est-à-dire le nombre de donnees)
+    // On suppose que l'operande 2 est de la forme "data1,data2,data3..."
     int nb_comma = 0;
     for(int i = 0; i<strlen(operand2); i++){
         if(operand2[i] == ','){
@@ -39,66 +35,61 @@ Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
         }
     }
 
-    total_data_allocated+=nb_comma+1; // On met à jour le compteur de la taille totale des données
+    total_data_allocated+=nb_comma+1; // On met à jour le compteur de la taille totale des donnees
     return new_i; // On retourne l'instruction
 }
 
-Instruction *parse_code_instruction(const char *line,HashMap *labels,int code_count){
-    // Allocation de la structure Instruction
-    Instruction *new_i = (Instruction *)malloc(sizeof(Instruction));
-    if(new_i == NULL){
-        LOG_ERROR("échec d'allocation mémoire");
-        return NULL;
+Instruction *parse_code_instruction(const char *line, HashMap *labels, int code_count) {
+    char l[64];
+    strncpy(l, line, sizeof(l));
+    l[sizeof(l) - 1] = '\0'; // Securite buffer overflow
+
+    // Nettoyage : on enleve les \r et \n en fin de ligne
+    size_t len = strlen(l);
+    while (len > 0 && (l[len - 1] == '\n' || l[len - 1] == '\r')) {
+        l[--len] = '\0';
     }
-    char token1[32];
-    char token2[32];
-    char token3[32];
 
     // Extraction des champs de l'instruction
-    sscanf(line,"%s %s %s",token1, token2, token3);
-    
-    if(token1[strlen(token1)-1] == ':'){ // si le premier token est un label
-        // On supprime le ':' à la fin du label
-        token1[strlen(token1)-1] = '\0';
-        
-        int *allocated_ptr = (int *)malloc(sizeof(int));
-        if(allocated_ptr == NULL){
-            LOG_ERROR("échec d'allocation mémoire");
-            return NULL;
-        }
+    char *token = strtok(l, " ");
+
+    if (token == NULL) return NULL;
+
+    // Gestion du label
+    if (token[strlen(token) - 1] == ':') {
+        token[strlen(token) - 1] = '\0'; // Supprime le ':'
+
+        int *allocated_ptr = malloc(sizeof(int));
+        LOG_ASSERT(allocated_ptr != NULL, "echec d'allocation memoire");
         *allocated_ptr = code_count;
-        hashmap_insert(labels,token1,allocated_ptr);  // On insère le code_count dans le hashmap
+        hashmap_insert(labels, token, allocated_ptr); // On insere le code_count dans les labels
 
-        new_i->mnemonic = strdup(token2); // On récupère le mnemonique
-
-        // On récupère les opérandes
-        char *operand1;
-        char *operand2;
-        operand1 = strtok(token3, ", ");
-        operand2 = strtok(NULL, ", ");
-        new_i->operand1 = strdup(operand1);
-        new_i->operand2 = strdup(operand2);
-    }else{
-        new_i->mnemonic = strdup(token1);
-
-        char *operand1;
-        char *operand2;
-        operand1 = strtok(token2, ", ");
-        operand2 = strtok(NULL, ", "); 
-        new_i->operand1 = strdup(operand1);
-        
-        if(operand2!=NULL){
-            new_i->operand2 = strdup(operand2);
-        }else{
-            new_i->operand2 = strdup("");
-        }
-        
+        token = strtok(NULL, " "); // mnemonic apres le label
     }
+
+    if (token == NULL) {
+        return NULL;
+    }
+
+    // On alloue la structure Instruction
+    Instruction *new_i = malloc(sizeof(Instruction));
+    LOG_ASSERT(new_i != NULL, "echec d'allocation memoire");
+
+    new_i->mnemonic = strdup(token); // Copie le mnemonic
+
+    // Operande 1
+    token = strtok(NULL, " ,");
+    new_i->operand1 = token!=NULL ? strdup(token) : strdup(""); // Copie l'operande 1
+
+    // Operande 2
+    token = strtok(NULL, " ,");
+    new_i->operand2 = token!=NULL ? strdup(token) : strdup(""); // Copie l'operande 2
 
     return new_i;
 }
 
-int isBlank(char *line) {
+int is_blank(char *line) {
+    // Renvoie 1 si la ligne est vide, 0 sinon
     char *ch;
 
     for(ch = line; *ch != '\0'; ++ch) {
@@ -110,78 +101,88 @@ int isBlank(char *line) {
     return 1;
 }
 
-ParserResult *parse(const char*filename){
+ParserResult *parse(const char *filename){
+    // On alloue la structure ParserResult
     ParserResult *new_r= (ParserResult *)malloc(sizeof(ParserResult));
     new_r->data_count = 0;
     new_r->code_count = 0;
-    if(new_r == NULL){
-        LOG_ERROR("échec d'allocation mémoire");
-        return NULL;
-    }
-    FILE* f = fopen(filename, "r");
-    if(f==NULL){
-        LOG_ERROR("échec à l'ouverture du fichier %s", filename);
-        return NULL;
-    }
-    char buffer[64];
-    int is_in_data = 0;
-    int is_in_code = 0;
+    LOG_ASSERT(new_r != NULL, "echec d'allocation memoire");
 
+    // On ouvre le fichier
+    FILE* f = fopen(filename, "r");
+    LOG_ASSERT(f != NULL, "echec à l'ouverture du fichier \"%s\"", filename);
+
+    char buffer[64];
+    int is_in_data = 0; // Flag pour savoir si on est dans la section .DATA
+    int is_in_code = 0; // Flag pour savoir si on est dans la section .CODE
+
+    // On compte le nombre d'instructions dans le fichier
     while(fgets(buffer,sizeof(buffer),f)){
-        if(isBlank(buffer)==1){
+        if(is_blank(buffer)==1){ // Si la ligne est vide, on l'ignore
             continue;
         }
 
-        if(strncmp(buffer,".DATA", 5) == 0){
+        if(strncmp(buffer,".DATA", 5) == 0){ // Si on trouve la section .DATA
             is_in_data = 1;
             is_in_code = 0;
             continue;
         }
-        if(strncmp(buffer,".CODE", 5) == 0){
+        if(strncmp(buffer,".CODE", 5) == 0){ // Si on trouve la section .CODE
             is_in_code = 1;
             is_in_data = 0;
             continue;
         }
 
         if(is_in_data == 1){
-            new_r->data_count += 1;
+            new_r->data_count += 1; // On compte le nombre d'instructions dans la section .DATA
         }
         
         if(is_in_code == 1){
-            new_r->code_count += 1;
+            new_r->code_count += 1; // On compte le nombre d'instructions dans la section .CODE
         }
     }
     is_in_data = 0;
     is_in_code = 0;
 
+    // On alloue les tableaux d'instructions
     new_r->data_instructions = (Instruction **) malloc(new_r->data_count*sizeof(Instruction*));
     new_r->code_instructions = (Instruction **) malloc(new_r->code_count*sizeof(Instruction*));
+    
+    LOG_ASSERT(!(new_r->data_instructions==NULL || new_r->code_instructions == NULL),
+        "echec d'allocation memoire"
+    );
+
+    // On initialise les tables de hachage pour les labels et les emplacements de memoire
     new_r->memory_locations = hashmap_create();
     new_r->labels = hashmap_create();
+    
+    // On initialise les instructions
     Instruction** curr_code =  new_r->code_instructions;
     Instruction** curr_data =  new_r->data_instructions;
     
-    fseek(f, 0, SEEK_SET);
+    fseek(f, 0, SEEK_SET); // On remet le curseur au debut du fichier
 
-    int code_line = 0;
+    int code_line = 0; // Compteur de ligne pour les instructions de code
 
+    // On parse le fichier
     while(fgets(buffer,sizeof(buffer),f)){
-        if(isBlank(buffer)==1){
+        if(is_blank(buffer)==1){ // Si la ligne est vide, on l'ignore
             continue;
         }
 
-        if(strncmp(buffer,".DATA", 5) == 0){
+        if(strncmp(buffer,".DATA", 5) == 0){ // Si on trouve la section .DATA
             is_in_data = 1;
             is_in_code = 0;
             continue;
         }
-        if(strncmp(buffer,".CODE", 5) == 0){
+        if(strncmp(buffer,".CODE", 5) == 0){ // Si on trouve la section .CODE
             is_in_code = 1;
             is_in_data = 0;
             continue;
         }
         
         if(is_in_data == 1){
+            // On parse l'instruction de donnees
             *curr_data=parse_data_instruction(buffer, new_r->memory_locations);
             //printf("parsed data - %s %s %s\n",
             //    (*curr_data)->mnemonic,
@@ -191,6 +192,7 @@ ParserResult *parse(const char*filename){
         }
         
         if(is_in_code == 1){
+            // On parse l'instruction de code
             *curr_code=parse_code_instruction(buffer, new_r->labels,code_line);
             //printf("parsed code - %s %s %s\n",
             //    (*curr_code)->mnemonic,
@@ -201,11 +203,12 @@ ParserResult *parse(const char*filename){
             
         }
     }
-    fclose(f);
+    fclose(f); // On ferme le fichier
     return new_r;
 }
 
 void free_instruction(Instruction* inst){
+    // Libération de la mémoire allouée pour l'instruction
     free(inst->mnemonic);
     free(inst->operand1);
     free(inst->operand2);
@@ -213,15 +216,19 @@ void free_instruction(Instruction* inst){
 }
 
 void free_parser_result(ParserResult *result){
+    // Libération de la mémoire allouée pour le résultat du parseur
     for(int i = 0; i<result->data_count;  i++){
+        // Libération de chaque instruction de données
         free_instruction(result->data_instructions[i]);
     }
     free(result->data_instructions);
     for(int i = 0; i<result->code_count;  i++){
+        // Libération de chaque instruction de code
         free_instruction(result->code_instructions[i]);
     }
     free(result->code_instructions);
 
+    // Libération de la mémoire allouée pour les tables de hachage
     hashmap_destroy(result->memory_locations);
     hashmap_destroy(result->labels);
 
