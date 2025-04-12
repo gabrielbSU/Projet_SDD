@@ -26,7 +26,7 @@ Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
     *allocated_ptr = total_data_allocated; // On stocke l'adresse de la donnee
     hashmap_insert(memory_locations, new_i->mnemonic,allocated_ptr); // On insere dans le hashmap
 
-    // On compte le nombre de virgules dans l'operande 2 (c'est-à-dire le nombre de donnees)
+    // On compte le nombre de virgules dans l'operande 2 (c'est-a-dire le nombre de donnees)
     // On suppose que l'operande 2 est de la forme "data1,data2,data3..."
     int nb_comma = 0;
     for(int i = 0; i<strlen(operand2); i++){
@@ -35,7 +35,7 @@ Instruction *parse_data_instruction(const char *line,HashMap *memory_locations){
         }
     }
 
-    total_data_allocated+=nb_comma+1; // On met à jour le compteur de la taille totale des donnees
+    total_data_allocated+=nb_comma+1; // On met a jour le compteur de la taille totale des donnees
     return new_i; // On retourne l'instruction
 }
 
@@ -110,7 +110,7 @@ ParserResult *parse(const char *filename){
 
     // On ouvre le fichier
     FILE* f = fopen(filename, "r");
-    LOG_ASSERT(f != NULL, "echec à l'ouverture du fichier \"%s\"", filename);
+    LOG_ASSERT(f != NULL, "echec a l'ouverture du fichier \"%s\"", filename);
 
     char buffer[64];
     int is_in_data = 0; // Flag pour savoir si on est dans la section .DATA
@@ -184,20 +184,12 @@ ParserResult *parse(const char *filename){
         if(is_in_data == 1){
             // On parse l'instruction de donnees
             *curr_data=parse_data_instruction(buffer, new_r->memory_locations);
-            //printf("parsed data - %s %s %s\n",
-            //    (*curr_data)->mnemonic,
-            //    (*curr_data)->operand1,
-            //    (*curr_data)->operand2);
             curr_data++;
         }
         
         if(is_in_code == 1){
             // On parse l'instruction de code
             *curr_code=parse_code_instruction(buffer, new_r->labels,code_line);
-            //printf("parsed code - %s %s %s\n",
-            //    (*curr_code)->mnemonic,
-            //    (*curr_code)->operand1,
-            //    (*curr_code)->operand2);
             curr_code++;
             code_line++;
             
@@ -208,7 +200,7 @@ ParserResult *parse(const char *filename){
 }
 
 void free_instruction(Instruction* inst){
-    // Libération de la mémoire allouée pour l'instruction
+    // Liberation de la memoire allouee pour l'instruction
     free(inst->mnemonic);
     free(inst->operand1);
     free(inst->operand2);
@@ -216,19 +208,19 @@ void free_instruction(Instruction* inst){
 }
 
 void free_parser_result(ParserResult *result){
-    // Libération de la mémoire allouée pour le résultat du parseur
+    // Liberation de la memoire allouee pour le resultat du parseur
     for(int i = 0; i<result->data_count;  i++){
-        // Libération de chaque instruction de données
+        // Liberation de chaque instruction de donnees
         free_instruction(result->data_instructions[i]);
     }
     free(result->data_instructions);
     for(int i = 0; i<result->code_count;  i++){
-        // Libération de chaque instruction de code
+        // Liberation de chaque instruction de code
         free_instruction(result->code_instructions[i]);
     }
     free(result->code_instructions);
 
-    // Libération de la mémoire allouée pour les tables de hachage
+    // Liberation de la memoire allouee pour les tables de hachage
     hashmap_destroy(result->memory_locations);
     hashmap_destroy(result->labels);
 

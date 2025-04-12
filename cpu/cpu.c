@@ -30,9 +30,11 @@ CPU *cpu_init(int memory_size){
     int* SP = (int*)malloc(sizeof(int));    // Stack Pointer
     int* BP = (int*)malloc(sizeof(int));    // Base Pointer
 
+    int* ES = (int*)malloc(sizeof(int));    // Extra segment
+
     LOG_ASSERT(!(AX == NULL || BX == NULL ||CX == NULL ||
         DX == NULL || IP == NULL || ZF == NULL ||
-        SF == NULL || SP == NULL || BP == NULL),
+        SF == NULL || SP == NULL || BP == NULL || ES == NULL),
          "echec d'allocation memoire"
         );
 
@@ -46,8 +48,10 @@ CPU *cpu_init(int memory_size){
     *ZF = 0;
     *SF = 0;
 
-    *SP = STACK_SIZE-1; // On peut le stack pointer au début de la pile
+    *SP = STACK_SIZE-1; // On peut le stack pointer au debut de la pile
     *BP = 0;
+
+    *ES = -1;
 
     // Stockages des registres dans le contexte du cpu
     hashmap_insert(cpu->context, "AX", AX);
@@ -61,6 +65,8 @@ CPU *cpu_init(int memory_size){
 
     hashmap_insert(cpu->context, "SP", SP);
     hashmap_insert(cpu->context, "BP", BP);
+
+    hashmap_insert(cpu->context, "ES", ES);
 
     // Creation du segment de pile (Stack Segment)
     int code = create_segment(cpu->memory_handler,"SS",0,STACK_SIZE);
@@ -124,7 +130,7 @@ void *store(MemoryHandler *handler,const char *segment_name,int pos, void*data){
         LOG_ERROR("la position depasse la taille du segment");
         return NULL;
     }
-    // stockage de la donnee dans le segment à sa position <pos>
+    // stockage de la donnee dans le segment a sa position <pos>
     handler->memory[seg->start+pos] = data;
 
     // retourne data pour verifier si la fonction est executee avec succes, sinon retourne NULL.
@@ -134,11 +140,14 @@ void *load(MemoryHandler *handler,const char *segment_name,int pos){
     // Recuperation du segment de donne <segment_name>
     Segment *seg = (Segment*)hashmap_get(handler->allocated, segment_name);
     if(seg==NULL){
-        LOG_ERROR("segment \"%s\" position \"%i\" non trouve",segment_name, pos);
+        LOG_ERROR("segment \"%s\" non trouve",segment_name);
         return NULL;
     }
-    // Retourne la donnee à la position <pos> du segment
-    return handler->memory[seg->start+pos];
+    // Retourne la donnee a la position <pos> du segment
+    if(pos<seg->size){
+        return handler->memory[seg->start+pos];
+    }
+    return NULL;
 }
 void allocate_variables(CPU *cpu, Instruction **data_instructions,int data_count){
     int total_size = 0;
@@ -152,7 +161,7 @@ void allocate_variables(CPU *cpu, Instruction **data_instructions,int data_count
                 nb_comma++;
             }
         }
-        // On ajoute le nombre de virgules + 1 à la taille totale
+        // On ajoute le nombre de virgules + 1 a la taille totale
         total_size += nb_comma+1;
     }
     
@@ -170,7 +179,7 @@ void allocate_variables(CPU *cpu, Instruction **data_instructions,int data_count
         // On recupere l'instruction
         Instruction *inst = data_instructions[i];
         
-        // On recupere la donnee à stocker
+        // On recupere la donnee a stocker
         char *data = strtok(inst->operand2, ", ");
         
         while (data != NULL) {
@@ -183,18 +192,75 @@ void allocate_variables(CPU *cpu, Instruction **data_instructions,int data_count
             void* stored_data = store(cpu->memory_handler, "DS", curr_offset, new_data);
             LOG_ASSERT(stored_data!=NULL,
                 "echec du stockage de \"%s\" dans \"DS\"", data);
-            // On met à jour l'offset courant
+            // On met a jour l'offset courant
             curr_offset++;
             
             data = strtok(NULL, ", ");
         }
     }
 }
+int alloc_es_segment(CPU *cpu){
+    // Recuperation des registres, de la taille et de la strategie d'allocation
+    int size = *(int*)hashmap_get(cpu->context, "AX");
+    int strategy = *(int*)hashmap_get(cpu->context, "BX");
+    int *zf = (int*)hashmap_get(cpu->context, "ZF");
+    int *es = (int*)hashmap_get(cpu->context, "ES");
+
+    // On recherche une adresse libre pour le segment "ES"
+    int start = find_free_address_strategy(cpu->memory_handler, size, strategy);
+    if(start==-1){
+        *zf = 1;
+        LOG_ERROR("echec d'allocation du segment \"ES\"");
+        return 0; // Aucune adresse libre trouvee
+    }else{
+        *zf = 0;
+    }
+
+    // On cree le segment "ES"
+    int code_seg = create_segment(cpu->memory_handler, "ES", start, size);
+    LOG_ASSERT(code_seg!=0, "echec de creation du segment \"ES\"");
+    // On initialise le segment "ES" avec des zeros
+    for(int i = 0; i<size; i++){
+        int *val = (int*)malloc(sizeof(int));
+        *val = 0;
+        // On stocke la valeur dans le segment "ES"
+        store(cpu->memory_handler, "ES", i, val);
+    }
+    // On enregistre l'adresse de base de l'extra segment dans le registre "ES"
+    *es = start;
+    return 1; // Allocation reussie
+}
+int free_es_segment(CPU *cpu){
+    // Recuperation du segment "ES"
+    Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "ES");
+    if(seg == NULL){
+        LOG_ERROR("echec de suppresion du segment de donnee \"ES\"");
+        return 0; // Echec de suppression
+    }
+
+    // On libere individuellement chaque valeur allouee dans le segment "ES"
+    for(int i = 0; i<seg->size; i++){
+        void *data = cpu->memory_handler->memory[seg->start+i];
+        free(data); // Liberation de la memoire allouee
+        cpu->memory_handler->memory[seg->start+i] = NULL; // Remise a NULL
+        //printf("free %i\n", seg->start+i);
+    }
+
+    // On libere le segment "ES"
+    int code = remove_segment(cpu->memory_handler, "ES");
+    LOG_ASSERT(code!=0, "echec de liberation du segment \"ES\"");
+
+    // On remet le registre "ES" a -1
+    int *es = (int*)hashmap_get(cpu->context, "ES");
+    *es = -1;
+
+    return 1; // Liberation reussie
+}
 void print_data_segment(CPU *cpu){
     // Recuperation du segment de donnees
     Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "DS");
     for(int i = seg->start; i<seg->start+seg->size; i++){
-        // On recupere la donnee à la position i
+        // On recupere la donnee a la position i
         void *data = cpu->memory_handler->memory[i];
         if(data!=NULL){
             // On affiche la donnee
@@ -267,7 +333,7 @@ void *memory_direct_addressing(CPU *cpu, const char *operand){
     token1 = strtok(op, "["); // "operand2]"
     token1 = strtok(token1, "]"); // "operand2"
 
-    // Recuperation de la valeur dans le segment de donnees à la position specifiee
+    // Recuperation de la valeur dans le segment de donnees a la position specifiee
     void* val = load(cpu->memory_handler, "DS", atoi(token1));
     
     if(val==NULL){
@@ -301,7 +367,7 @@ void *register_indirect_addressing(CPU *cpu, const char *operand){
         return NULL;
     }
 
-    // Recuperation de la valeur dans le segment de donnees à la position specifiee
+    // Recuperation de la valeur dans le segment de donnees a la position specifiee
     void* val = load(cpu->memory_handler, "DS", *(int*)i);
     
     if(val==NULL){
@@ -311,8 +377,26 @@ void *register_indirect_addressing(CPU *cpu, const char *operand){
 
     return val; // retourne le pointeur vers la valeur
 }
-void handle_MOV(CPU *cpu, void *src, void *dest){
-    memcpy(dest, src, sizeof(int)); // Copie de la valeur source vers la destination
+void *segment_override_addressing(CPU* cpu, const char* operand){
+
+    // Verification si l'operande est un segment override
+    if(matches("^\\[[A-Z]S:[A-D]X\\]$", operand) == 0){
+        return NULL;
+    }
+    
+    // On extrait le segment et le registre de l'operande
+    char op[32];
+    strcpy(op, operand);
+
+    char *token = strtok(op,"[");   // SEGMENT:REGISTRE]
+    char *seg = strtok(token,":");  // SEGMENT
+    token = strtok(NULL,":");       // REGISTRE]
+    token = strtok(token,"]");      // REGISTRE
+
+    void *i = hashmap_get(cpu->context, token); // On recupere le registre
+    void *val = load(cpu->memory_handler, seg, *(int*)i); // On recupere la valeur dans le segment de donnees a la position specifiee
+    
+    return val;
 }
 void *resolve_adressing(CPU *cpu,const char *operand){
     // renvoie la valeur de l'operande selon le mode d'adressage
@@ -329,6 +413,10 @@ void *resolve_adressing(CPU *cpu,const char *operand){
         return data;
     }
     data = register_indirect_addressing(cpu, operand);
+    if(data != NULL){
+        return data;
+    }
+    data = segment_override_addressing(cpu, operand);
     if(data != NULL){
         return data;
     }
@@ -401,7 +489,7 @@ int search_and_replace(char **str, HashMap *values) {
 }
 int resolve_constants(ParserResult *result){
     for(int i = 0; i< result->code_count; i++){
-        if(result->code_instructions[i]->operand1[0] == '\0'){ // Si l'operande 1 est vide (c'est-à-dire "HALT")
+        if(result->code_instructions[i]->operand1[0] == '\0'){ // Si l'operande 1 est vide (c'est-a-dire "HALT")
             continue;
         } else if (result->code_instructions[i]->operand2[0] == '\0'){ // Si l'operande 2 est vide
             // On recupere le numero de l'instruction associee au label
@@ -442,9 +530,13 @@ void allocate_code_segment(CPU *cpu, Instruction **code_instructions, int code_c
         // On stocke l'instruction dans le segment de code
         store(cpu->memory_handler, "CS", i, instr);
     }
-    // On initialise le registre IP à 0 (debut du segment de code)
+    // On initialise le registre IP a 0 (debut du segment de code)
     void* ip = hashmap_get(cpu->context, "IP");
     *(int*)ip = 0;
+}
+void handle_MOV(CPU *cpu, void *src, void *dest){
+    LOG_ASSERT(!(src==NULL || dest==NULL), "echec de l'instruction MOV");
+    memcpy(dest, src, sizeof(int)); // Copie de la valeur source vers la destination
 }
 int handle_instruction(CPU *cpu, Instruction *instr, void *src, void *dest){
     // Application de l'instruction selon le mnemonic (retourne 1 si execute avec success, 0 sinon)
@@ -452,11 +544,11 @@ int handle_instruction(CPU *cpu, Instruction *instr, void *src, void *dest){
         handle_MOV(cpu, src, dest);
         return 1;
     }else if(strcmp(instr->mnemonic, "ADD")==0){
-        *(int*)dest += *(int*)src;  // Additionne la valeur source à la destination
+        *(int*)dest += *(int*)src;  // Additionne la valeur source a la destination
         return 1;
     }else if(strcmp(instr->mnemonic, "CMP")==0){
-        int cmp = *(int*)dest-*(int*)src; // Compare la valeur source à la destination
-        // On met à jour les flags ZF et SF selon le resultat de la comparaison
+        int cmp = *(int*)dest-*(int*)src; // Compare la valeur source a la destination
+        // On met a jour les flags ZF et SF selon le resultat de la comparaison
         void* zf = hashmap_get(cpu->context, "ZF");
         void* sf = hashmap_get(cpu->context, "SF");
         if(cmp == 0){
@@ -472,63 +564,65 @@ int handle_instruction(CPU *cpu, Instruction *instr, void *src, void *dest){
         return 1;
     }else if(strcmp(instr->mnemonic, "JMP")==0){
         void* ip = hashmap_get(cpu->context, "IP"); // Instruction Pointer
-        // On met à jour l'IP avec la valeur de l'operande 1
+        // On met a jour l'IP avec la valeur de l'operande 1
         *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1);
 
         return 1;
     }else if(strcmp(instr->mnemonic, "JZ")==0){
         void* zf = hashmap_get(cpu->context, "ZF"); // Zero Flag
-        // On verifie si le flag ZF est egal à 1 (verification de l'egalite)
+        // On verifie si le flag ZF est egal a 1 (verification de l'egalite)
         if(*(int*)zf == 1){
             void* ip = hashmap_get(cpu->context, "IP"); // Instruction Pointer
-            *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1); // On met à jour l'IP avec la valeur de l'operande 1
+            *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1); // On met a jour l'IP avec la valeur de l'operande 1
         }
         return 1;
     }else if(strcmp(instr->mnemonic, "JNZ") == 0){
         void* zf = hashmap_get(cpu->context, "ZF"); // Zero Flag
-        // On verifie si le flag ZF est egal à 0 (verification de l'inegalite)
+        // On verifie si le flag ZF est egal a 0 (verification de l'inegalite)
         if(*(int*)zf == 0){
             void* ip = hashmap_get(cpu->context, "IP"); // Instruction Pointer
-            *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1); // On met à jour l'IP avec la valeur de l'operande 1
+            *(int*)ip = *(int*)resolve_adressing(cpu, instr->operand1); // On met a jour l'IP avec la valeur de l'operande 1
         }
         return 1;
     }else if(strcmp(instr->mnemonic, "HALT")==0){
         void* ip = hashmap_get(cpu->context, "IP"); // Instruction Pointer
         // On recupere le segment de code (CS)
         Segment *cs = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
-        // On met à jour l'IP avec la taille du segment de code (fin de l'execution)
+        // On met a jour l'IP avec la taille du segment de code (fin de l'execution)
         *(int*)ip = cs->size;
         return 1; 
     }else if(strcmp(instr->mnemonic, "PUSH")==0){
-        if(dest==NULL){ // Si aucun registre n'a été spécifié
+        if(dest==NULL){ // Si aucun registre n'a ete specifie
             void* ax = hashmap_get(cpu->context, "AX");
             return push_value(cpu, *(int*)ax);
         }
         return push_value(cpu, *(int*)dest);
     }else if(strcmp(instr->mnemonic, "POP")==0){
-        if(dest==NULL){ // Si aucun registre n'a été spécifié
+        if(dest==NULL){ // Si aucun registre n'a ete specifie
             void* ax = hashmap_get(cpu->context, "AX");
             return pop_value(cpu, ax);
         }
         return pop_value(cpu, dest);
+    }else if(strcmp(instr->mnemonic, "ALLOC")==0){
+        // On alloue un segment de memoire de taille dans "AX" avec la strategie dans "BX"
+        return alloc_es_segment(cpu);
+    }else if(strcmp(instr->mnemonic, "FREE")==0){
+        // On libere le segment de memoire "ES"
+        return free_es_segment(cpu);
     }
-
     return 0;
 }
-
 int execute_instruction(CPU *cpu, Instruction *instr){
     void* src =  resolve_adressing(cpu, instr->operand2); // On resout l'adressage de l'operande 2
     void* dest =  resolve_adressing(cpu, instr->operand1); // On resout l'adressage de l'operande 1
     return handle_instruction(cpu, instr, src, dest); // On execute l'instruction
 }
-
 Instruction *fetch_next_instruction(CPU *cpu){
     void* ip = hashmap_get(cpu->context, "IP"); // Instruction Pointer
-    void* inst = load(cpu->memory_handler, "CS", *(int*)ip); // On charge l'instruction à l'adresse pointee par l'IP
+    void* inst = load(cpu->memory_handler, "CS", *(int*)ip); // On charge l'instruction a l'adresse pointee par l'IP
     *(int*)ip +=1; // On incremente l'IP pour pointer vers la prochaine instruction
     return inst; // On retourne l'instruction chargee
 }
-
 void print_registers(CPU *cpu){
     // On affiche les registres du CPU
     printf("Registres :\n");
@@ -547,7 +641,6 @@ void print_registers(CPU *cpu){
     reg = hashmap_get(cpu->context, "SF");
     printf("SF -> %i\n", *(int*)reg);
 }
-
 int run_program(CPU *cpu){
     printf("--Etat initial--\n");
     print_data_segment(cpu);
@@ -560,16 +653,16 @@ int run_program(CPU *cpu){
             break;
         }
         printf("Execution de : %s %s %s\n", inst->mnemonic, inst->operand1, inst->operand2);
-        int exit_code = execute_instruction(cpu, inst);
-        printf("Code de sortie : %i\n", exit_code);
 
         printf("> ");
         char input[10];
         fgets(input, sizeof(input), stdin);
-    
         if (input[0] == 'q') {
             break;
         }
+
+        int exit_code = execute_instruction(cpu, inst);
+        printf("Code de sortie : %i\n", exit_code);
     }
 
     printf("--Etat Final--\n");
@@ -578,20 +671,19 @@ int run_program(CPU *cpu){
 
     return 1;
 }
-
 int push_value(CPU *cpu, int value){
-    void *sp = hashmap_get(cpu->context, "SP");
+    void *sp = hashmap_get(cpu->context, "SP"); // Stack Pointer
 
     // En cas d'erreurs
     if(sp == NULL){
         return -1;
     }
     if(*(int*)sp<0){
-        LOG_ERROR("stack overflow lors d'une opération push");
+        LOG_ERROR("stack overflow lors d'une operation push");
         return -1;
     }
 
-    void *val = malloc(sizeof(int));
+    void *val = malloc(sizeof(int)); // On alloue de la memoire pour la valeur
     *(int*)val = value;
 
     // on libere la memoire si une valeur est deja presente
@@ -599,25 +691,26 @@ int push_value(CPU *cpu, int value){
     if(old!=NULL){
         free(old);
     }
-    store(cpu->memory_handler, "SS", *(int*)sp, val);
+
+    store(cpu->memory_handler, "SS", *(int*)sp, val); // On stocke la valeur dans le segment de pile (Stack Segment)
     *(int*)sp -=1;
     return 0; // success
 }
-
 int pop_value(CPU *cpu, int *dest){
     void *sp = hashmap_get(cpu->context, "SP");
-    *(int*)sp +=1;
-    printf("dest %i %i\n", *(int*)dest, *(int*)sp);
+    *(int*)sp +=1; // On incremente le stack pointer
 
     // En cas d'erreurs
     if(sp == NULL || dest == NULL){
         return -1;
     }
+
+    // On verifie si la pile est vide
     if(*(int*)sp>=STACK_SIZE){
         LOG_ERROR("la pile est vide");
         return -1;
     }
-    int *val = (int*)load(cpu->memory_handler, "SS", *(int*)sp);
+    int *val = (int*)load(cpu->memory_handler, "SS", *(int*)sp); // On charge la valeur du sommet de la pile
     *dest = *val;
     
     return 0; // success

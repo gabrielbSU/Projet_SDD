@@ -200,3 +200,64 @@ int remove_segment(MemoryHandler *handler, const char *name) {
 
     return 1;
 }
+
+int first_fit_strategy(MemoryHandler *handler, int size){
+    Segment *current = handler->free_list;
+    while (current !=NULL){
+        if (size <= current->size ){ // si le segment libre est suffisamment grand
+            return current->start;  // Renvoie sa position si le segment libre est suffisamment grand
+        }
+        current =current ->next; // Passer au segment suivant
+    }
+
+    return -1; // Aucun segment libre trouve
+}
+
+int best_fit_strategy(MemoryHandler *handler, int size){
+    Segment *current = handler->free_list;
+    int size_min = 0x7FFFFFFF;  // valeur maximale possible
+    int start = -1; // position du segment
+    while (current !=NULL){
+        if (size <= current->size && current->size<size_min){ // si le segment libre est suffisamment grand
+            start = current->start; // Met a jour sa position
+            size_min = current->size;   // Mis a jour de la taille minimale
+        }
+        current =current ->next; // Passer au segment suivant
+    }
+
+    return start; // Renvoie la position du segment
+}
+
+int worst_fit_strategy(MemoryHandler *handler, int size){
+    Segment *current = handler->free_list;
+    int size_max = 0;  // valeur minimal possible
+    int start = -1; // position du segment
+    while (current !=NULL){
+        if (size <= current->size && current->size>size_max){ // si le segment libre est suffisamment grand
+            start = current->start; // Met a jour sa position
+            size_max = current->size;   // Mis a jour de la taille maximale
+        }
+        current =current ->next; // Passer au segment suivant
+    }
+
+    return start; // Renvoie la position du segment
+}
+
+int find_free_address_strategy(MemoryHandler *handler, int size, int strategy){
+    // selectionne la strategie
+    switch (strategy) {
+    case 0:
+        return first_fit_strategy(handler, size);
+        break;
+    case 1:
+        return best_fit_strategy(handler, size);
+        break;
+    case 2:
+        return worst_fit_strategy(handler, size);
+        break;
+    default:
+        LOG_ERROR("strategie d'adressage \"%i\" invalide", strategy);
+        return -1;
+        break;
+    }
+}
