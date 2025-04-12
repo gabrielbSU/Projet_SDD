@@ -20,6 +20,5 @@ MemoryHandler *memory_init(int size);
 Segment *find_free_segment(MemoryHandler* handler,int start,int size,Segment** prev);
 int create_segment(MemoryHandler *handler,const char *name,int start,int size);
 int remove_segment(MemoryHandler *handler,const char*name);
-void memoryHandler_destroy(MemoryHandler *handler);
 
 #endif

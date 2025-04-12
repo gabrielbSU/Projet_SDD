@@ -200,37 +200,3 @@ int remove_segment(MemoryHandler *handler, const char *name) {
 
     return 1;
 }
-
-void memoryHandler_destroy(MemoryHandler *handler){
-    // Liberation de la memoire allouee pour les segments de donnees
-    Segment *DS = (Segment*)hashmap_get(handler->allocated, "DS");
-    for(int i = 0; i<DS->size; i++){
-        free(handler->memory[DS->start+i]);
-    }
-
-    // Liberation de la memoire allouee pour les segments de donnees
-    Segment *CS = (Segment*)hashmap_get(handler->allocated, "CS");
-    for(int i = 0; i<CS->size; i++){
-        Instruction *inst = (Instruction *)handler->memory[CS->start+i];
-        if(inst == NULL){
-            continue;
-        }        
-        free(inst->mnemonic);
-        free(inst->operand1);
-
-        free(inst->operand2);
-        free(inst);
-    }
-
-    // Liberation de la memoire allouee pour le gestionnaire de memoire
-    hashmap_destroy(handler->allocated);
-    Segment *seg = handler->free_list;
-    while (seg != NULL) {
-        Segment *tmp = seg->next;
-        free(seg);
-        seg = tmp;
-    }
-
-    free(handler->memory); // Liberation de la memoire allouee pour le tableau de memoire
-    free(handler); // Liberation du gestionnaire de memoire
-}

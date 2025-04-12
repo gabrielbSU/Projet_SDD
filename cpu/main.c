@@ -59,7 +59,7 @@ int main(){
     cpu_destroy(cpu);
     */
 
-    ParserResult *res = parse("fibonacci.asm");
+    ParserResult *res = parse("asm/code.asm");
 
     //printf("start -> %i\n", *(int*)hashmap_get(res->labels, "start"));
     //printf("loop -> %i\n\n",*(int*)hashmap_get(res->labels, "loop"));
@@ -86,17 +86,14 @@ int main(){
 
     run_program(cpu);
 
-    //print_data_segment(cpu);
-
-    //Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "CS");
-    //for(int i = seg->start; i<seg->start+seg->size; i++){
-    //    void *data = cpu->memory_handler->memory[i];
-    //    Instruction* inst = (Instruction*)data;
-    //    if(data!=NULL){
-    //        printf("CS %i: %s\n", i, inst->operand2);
-    //    }
-    //}
-
+    Segment *seg = (Segment*)hashmap_get(cpu->memory_handler->allocated, "SS");
+    for(int i = seg->start; i<seg->start+seg->size; i++){
+        void *data = cpu->memory_handler->memory[i];
+        if(data!=NULL){
+            printf("SS %i: %i\n", i, *(int*)data);
+        }
+    }
+    
     
 
     cpu_destroy(cpu);

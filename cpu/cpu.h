@@ -26,4 +26,6 @@ void *resolve_adressing(CPU *cpu,const char *operand);
 int resolve_constants(ParserResult *result);
 void allocate_code_segment(CPU *cpu, Instruction **code_instructions, int code_count);
 int run_program(CPU *cpu);
+int push_value(CPU *cpu, int value);
+int pop_value(CPU *cpu, int *dest);
 #endif
