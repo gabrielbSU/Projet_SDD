@@ -122,6 +122,10 @@ ParserResult *parse(const char *filename){
             continue;
         }
 
+        if(buffer[0] == ';'){ // Si la ligne est un commentaire, on l'ignore
+            continue;
+        }
+
         if(strncmp(buffer,".DATA", 5) == 0){ // Si on trouve la section .DATA
             is_in_data = 1;
             is_in_code = 0;
@@ -170,6 +174,10 @@ ParserResult *parse(const char *filename){
             continue;
         }
 
+        if(buffer[0] == ';'){ // Si la ligne est un commentaire, on l'ignore
+            continue;
+        }
+
         if(strncmp(buffer,".DATA", 5) == 0){ // Si on trouve la section .DATA
             is_in_data = 1;
             is_in_code = 0;
@@ -211,11 +219,17 @@ void free_parser_result(ParserResult *result){
     // Liberation de la memoire allouee pour le resultat du parseur
     for(int i = 0; i<result->data_count;  i++){
         // Liberation de chaque instruction de donnees
+        if(result->data_instructions[i] == NULL){
+            continue;
+        }
         free_instruction(result->data_instructions[i]);
     }
     free(result->data_instructions);
     for(int i = 0; i<result->code_count;  i++){
         // Liberation de chaque instruction de code
+        if(result->code_instructions[i] == NULL){
+            continue;
+        }
         free_instruction(result->code_instructions[i]);
     }
     free(result->code_instructions);

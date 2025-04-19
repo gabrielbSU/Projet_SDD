@@ -237,7 +237,7 @@ int worst_fit_strategy(MemoryHandler *handler, int size){
             start = current->start; // Met a jour sa position
             size_max = current->size;   // Mis a jour de la taille maximale
         }
-        current =current ->next; // Passer au segment suivant
+        current = current ->next; // Passer au segment suivant
     }
 
     return start; // Renvoie la position du segment

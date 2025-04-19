@@ -62,6 +62,7 @@ int hashmap_insert(HashMap *map, const char *key, void *value) {
 }
 
 void *hashmap_get(HashMap *map, const char *key) {
+    // Vérifier si la table de hachage et la clé sont valides
     if (map == NULL || key == NULL) {
         LOG_ERROR("Erreur, HashMap est null ou la clé est nulle");
         return NULL;
@@ -69,11 +70,16 @@ void *hashmap_get(HashMap *map, const char *key) {
     unsigned int index = simple_hash(key) % map->size;
     unsigned int original_index = index;
 
+    // Chercher la clé dans la table de hachage
     while (map->table[index].key != NULL) {
+        // Si la clé est trouvée, retourner la valeur
         if (map->table[index].key != TOMBSTONE && strcmp(map->table[index].key, key) == 0) {
             return map->table[index].value;
         }
+        // Passer à l'emplacement suivant
         index = (index + 1) % map->size;
+
+        // Si nous avons fait un tour complet, cela signifie que la clé n'est pas présente
         if (index == original_index) {
             break; 
         }
@@ -82,12 +88,14 @@ void *hashmap_get(HashMap *map, const char *key) {
 }
 
 int hashmap_remove(HashMap *map, const char *key) {
+    // Vérifier si la table de hachage et la clé sont valides
      if (map == NULL || key == NULL) {
         LOG_ERROR("Erreur : paramètres invalides");
         return 0;
     }
     unsigned int index = simple_hash(key) % map->size;
     unsigned int index_original = index;
+    
     while (map->table[index].key != NULL) {
         if (map->table[index].key != TOMBSTONE && strcmp(map->table[index].key, key) == 0) {
             // Supprimer l'entrée

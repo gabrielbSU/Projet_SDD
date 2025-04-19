@@ -5,12 +5,14 @@
 #include "dynamique.h"
 #include "parser.h"
 
+// Structure CPU
 typedef struct {
     MemoryHandler* memory_handler; //Gestionnaire de memoire
-    HashMap *context; //Registres (AX, BX, CX, DX)
+    HashMap *context; //Registres
     HashMap *constant_pool; //Table de hachage pour stocker les valeurs immediates
 } CPU;
 
+// Fonctions de gestion du CPU
 CPU *cpu_init(int memory_size);
 void cpu_destroy(CPU *cpu);
 void *store(MemoryHandler *handler,const char *segment_name,int pos, void*data);
