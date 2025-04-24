@@ -28,7 +28,7 @@ pour n = "max" et stocke le résultat dans la variable "resultat" dans le segmen
 ```bash
 make && ./main asm/jeu_de_testes.asm
 ```
-testes les différentes instructions assembleurs (voir les commentaires du fichier)
+Teste les différentes instructions assembleurs (voir les commentaires du fichier pour la description des jeux d'essais).
 ## Contenu
 
 Le programme est capable d’exécuter les instructions assembleur suivantes :
@@ -54,8 +54,9 @@ L'exécution de chaque instruction revoie un code d'erreur : 0 si l'instruction 
 
 ## Description du code
 le code est divisé en plusieurs fichiers :
-- `cpu.c` : contient la structure de la CPU et les fonctions de gestion de la mémoire.
-- `cpu.h` : contient la déclaration de la structure de la CPU et des fonctions de gestion de la mémoire.
+- `makefile` : fichier de compilation du projet.
+- `cpu.c` : contient la structure du CPU et les fonctions de gestion de la mémoire.
+- `cpu.h` : contient la déclaration de la structure du CPU et des fonctions de gestion de la mémoire.
 - `dynamique.c` : contient les fonctions de gestion de segment de mémoire dynamique.
 - `dynamique.h` : contient la déclaration des fonctions de gestion de segment de mémoire dynamique.
 - `hachage.c` : contient les fonctions de gestion de la table de hachage.
@@ -69,7 +70,7 @@ le code est divisé en plusieurs fichiers :
 - `asm/jeu_de_testes.asm` : contient le code assembleur de testes des instructions.
 
 ### Table de hachage
-Le simulateur utilise une table de hachage avec résolution des collisions par un mécanisme de sondage/probing linéaire en pour stocker les valeurs des registres, des constantes, labels...
+Le simulateur utilise une table de hachage avec résolution des collisions par un mécanisme de sondage/probing linéaire pour stocker les valeurs des registres, des constantes, labels etc.
 ```c
 // Structure pour représenter une entrée de la table de hachage
 typedef struct hashentry {
@@ -129,7 +130,7 @@ typedef struct {
 ```
 
 ### Structure du CPU
-La structure de la CPU est définie dans le fichier `cpu.h` et contient les champs suivants :
+La structure du CPU est définie dans le fichier `cpu.h` et contient les champs suivants :
 
 ```c
 typedef struct {
@@ -152,7 +153,7 @@ int resolve_constants(ParserResult *result); // Résout les constantes du fichie
 void allocate_variables(CPU *cpu, Instruction **data_instructions,int data_count); // Alloue le segment de données dans la mémoire
 void allocate_code_segment(CPU *cpu, Instruction **code_instructions, int code_count); // Alloue le segment de code dans la mémoire
 ```
-Pour initialiser la mémoire du CPU qui contiennent les données du parsage du fichier assembleur.  
+pour initialiser la mémoire du CPU qui contiennent les données du parsage du fichier assembleur.  
 Pour libérer la mémoire, on utilise la fonction suivante :
 ```c
 // Libere le resultat du parseur
@@ -210,6 +211,7 @@ Le registre `BX` peut prendre les valeurs suivantes :
 - `0` : First Fit (première case libre trouvée)
 - `1` : Best Fit (meilleure case libre trouvée)
 - `2` : Worst Fit (plus grande case libre trouvée)
+
 Ensuite, il faut initialiser le registre `AX` avec la taille de la mémoire à allouer.
 La fonction `ALLOC` renvoie un code d'erreur : 0 si l'allocation s'est bien passée, une autre valeur sinon.  
 L'instruction `FREE` libère le segment mémoire pointé par le registre `ES` (Extra Segment).
