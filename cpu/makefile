@@ -1,6 +1,9 @@
 main: main.o parser.o hachage.o dynamique.o cpu.o
 	gcc -Wall -o main main.o parser.o hachage.o dynamique.o cpu.o
 
+soutenance: soutenance.o parser.o hachage.o dynamique.o cpu.o
+	gcc -Wall -o soutenance soutenance.o parser.o hachage.o dynamique.o cpu.o
+
 main.o: main.c logger.h
 	gcc -Wall -c main.c -o main.o
 
@@ -15,6 +18,9 @@ dynamique.o: dynamique.c dynamique.h logger.h
 
 cpu.o: cpu.c cpu.h logger.h
 	gcc -Wall -c cpu.c -o cpu.o
+
+soutenance.o: soutenance.c
+	gcc -Wall -c soutenance.c -o soutenance.o
 
 clean:
 	rm -f *.o main

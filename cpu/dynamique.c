@@ -12,7 +12,7 @@ MemoryHandler *memory_init(int size) {
     handler->memory = (void **)malloc(size * sizeof(void *));
     LOG_ASSERT(handler->memory!=NULL, "echec d'allocation memoire pour le tableau de memoire");
 
-    // Initialisation de la memoire à NULL
+    // Initialisation de la memoire a NULL
     for (int i = 0; i < size; i++) {
         handler->memory[i] = NULL;
     }
@@ -37,13 +37,13 @@ MemoryHandler *memory_init(int size) {
 
 Segment *find_free_segment(MemoryHandler* handler,int start,int size,Segment** prev){
     Segment *current = handler->free_list;
-    *prev=NULL; // Initialiser le pointeur precedent à NULL
+    *prev=NULL; // Initialiser le pointeur precedent a NULL
     while (current !=NULL){
         // Verifier si le segment libre est suffisamment grand et s'il est dans la plage demandee
         if (current->start<=start && (current->start + current->size)>= (start + size)){
             return current;
         }
-        *prev = current; // Mettre à jour le pointeur precedent
+        *prev = current; // Mettre a jour le pointeur precedent
         current =current ->next; // Passer au segment suivant
     }
 
@@ -76,11 +76,12 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
     new_seg->next = NULL;
 
     if (hashmap_insert(handler->allocated, name, new_seg) != 1) {
-        LOG_ERROR("impossible d'ajouter le segment à la table de hachage");
+        LOG_ERROR("impossible d'ajouter le segment a la table de hachage");
         free(new_seg);
         return 0;
     }
     
+    // Mettre a jour la liste des segments libres
     // Cas 1 : Le segment libre commence avant `start`
     if (free_segment->start < start) {
         Segment *before = (Segment *)malloc(sizeof(Segment));
@@ -92,12 +93,14 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
         before->size = start - free_segment->start;
         before->next = free_segment->next;
 
-        // Ajouter `before` à la liste des segments libres
+        // Ajouter `before` a la liste des segments libres
         if (prev == NULL) {
             handler->free_list = before;
         } else {
             prev->next = before;
         }
+
+        prev = before; // Mettre a jour le pointeur precedent
     }
 
     // Cas 2 : Le segment libre se termine après `start + size`
@@ -111,7 +114,7 @@ int create_segment(MemoryHandler *handler, const char *name, int start, int size
         after->size = free_segment->start + free_segment->size - (start + size);
         after->next = free_segment->next;
 
-        // Ajouter `after` à la liste des segments libres
+        // Ajouter `after` a la liste des segments libres
         if (prev == NULL) {
             handler->free_list = after;
         } else {
@@ -138,13 +141,7 @@ int remove_segment(MemoryHandler *handler, const char *name) {
         return 0;
     }
 
-    // Retirer le segment de la table de hachage
-    if (hashmap_remove(handler->allocated, name) != 1) {
-        LOG_ERROR("Erreur : impossible de retirer le segment de la table de hachage");
-        return 0;
-    }
-
-    // Ajouter le segment libere à la liste des segments libres
+    // Ajouter le segment libere a la liste des segments libres
     Segment *new_free = (Segment *)malloc(sizeof(Segment));
     if (new_free == NULL) {
         LOG_ERROR("Erreur d'allocation memoire pour le segment libre");
@@ -153,6 +150,12 @@ int remove_segment(MemoryHandler *handler, const char *name) {
     new_free->start = seg->start;
     new_free->size = seg->size;
     new_free->next = NULL;
+
+    // Retirer le segment de la table de hachage
+    if (hashmap_remove(handler->allocated, name) != 1) {
+        LOG_ERROR("Erreur : impossible de retirer le segment de la table de hachage");
+        return 0;
+    }
 
     // Fusionner avec les segments libres adjacents
     Segment *current = handler->free_list;
@@ -169,12 +172,15 @@ int remove_segment(MemoryHandler *handler, const char *name) {
                 prev->next = new_free;
             }
             current = new_free;
+            break;
         }
         // Fusionner avec le segment libre precedent
         else if (current->start + current->size == new_free->start) {
             current->size += new_free->size;
             free(new_free);
             new_free = current;
+            current = current->next;
+            continue;
         }
         // Inserer le segment libre dans la liste
         else if (new_free->start < current->start) {
