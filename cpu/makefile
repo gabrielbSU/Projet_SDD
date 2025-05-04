@@ -23,4 +23,4 @@ soutenance.o: soutenance.c
 	gcc -Wall -c soutenance.c -o soutenance.o
 
 clean:
-	rm -f *.o main
+	rm -f *.o main soutenance

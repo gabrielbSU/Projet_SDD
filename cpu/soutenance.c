@@ -52,6 +52,14 @@ int main()
     //memoryhandler_destroy(MH); // (non demande dans le projet) libere la memoire occupee par
                               // la structure memoryhandler 
 
+    //liberation de MH
+    remove_segment(MH, "DS");
+    remove_segment(MH, "CS");
+    free(MH->free_list);
+    free(MH->memory);
+    hashmap_destroy(MH->allocated);
+    free(MH);
+    
     return 0;
 }
 
